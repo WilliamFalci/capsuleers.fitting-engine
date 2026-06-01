@@ -22,6 +22,21 @@ const STRATEGIC_CRUISER_GROUP = 963
 const SUBSYSTEM_GROUPS = [954, 955, 956, 957, 958] // defensive/electronic/offensive/propulsion/core
 const TACTICAL_DESTROYER_GROUP = 1305
 const SHIP_MODIFIERS_GROUP = 1306   // T3D mode items live here ("<Ship> Defense Mode" etc.)
+const PROPULSION_MODULE_GROUP = 46  // Afterburners + MWDs; cap a fit at one (two
+                                    //   active prop mods is unrealistic and the
+                                    //   stacked-speed edge case isn't representative).
+/** Module groups excluded from generated fits: target-dependent ewar whose
+ *  stats pyfa models optimistically without a target (Nosferatu cap-gain), and
+ *  non-combat industrial/utility modules that don't belong on a self-contained
+ *  parity fit (mining, harvesting, scanning, salvage, cyno). Keeping them only
+ *  manufactured capacitor / utility diffs that aren't engine bugs. */
+const EXCLUDED_MODULE_GROUPS = new Set([
+    68,   // Energy Nosferatu (cap GAIN without a target — pyfa-optimistic)
+    47, 48, // Cargo Scanner, Ship Scanner
+    54, 464, 483, 538, 546, // Mining Laser, Strip Miner, Frequency Mining, Data Miners, Mining Upgrade
+    650, 1122, 737, 4138,   // Tractor Beam, Salvager, Gas Cloud Scoops, Gas Cloud Harvesters
+    658,  // Cynosural Field Generator
+])
 
 /** A T3D in-game ALWAYS has a mode active; pyfa auto-assigns modeItems[0] when
  *  none is set — the lowest-typeID mode whose name starts with the ship name
@@ -112,12 +127,16 @@ function shuffle(arr, r) { const a = arr.slice(); for (let i = a.length - 1; i >
 
 function fillSlot(dataset, ship, pool, slot, count, metaPickers, r, cpuMax, pgMax) {
     if (count <= 0) return []
-    let list = pool.bySlot[slot].filter(t => canFitModuleOnShip(ship, t, dataset) && sizeOk(t, ship, cpuMax, pgMax))
+    let list = pool.bySlot[slot].filter(t => canFitModuleOnShip(ship, t, dataset) && sizeOk(t, ship, cpuMax, pgMax)
+        && !EXCLUDED_MODULE_GROUPS.has(t.groupID))
     // Leftover HIGH slots are utility (neuts/nos/smartbombs/etc.) — never fill
     // them with weapons (those go on hardpoints) or hardpoint-less weapon junk.
     if (slot === 'HI') list = list.filter(t => !isTurretWeapon(t) && !isMissileLauncher(t))
     const out = []
     const usedGroups = new Map() // groupID -> times used (cap duplicates of stacking-penalized mods)
+    // At most ONE propulsion module per fit (two active prop mods isn't a real
+    // setup and the stacked-speed math is an unrepresentative edge case).
+    let propUsed = 0
     // distinct picks: cycle through a shuffled candidate list so we don't stack
     // 5 identical hardeners (unrealistic + triggers edge cases / sentinels).
     for (let i = 0; i < count; i++) {
@@ -125,8 +144,17 @@ function fillSlot(dataset, ship, pool, slot, count, metaPickers, r, cpuMax, pgMa
         let cands = shuffle(list.filter(t => metaOf(t) === meta), r)
         if (!cands.length) cands = shuffle(list, r)
         // prefer a module from a group we haven't filled twice already
-        const m = cands.find(t => (usedGroups.get(t.groupID) ?? 0) < 2) ?? cands[0]
+        let m = cands.find(t => (usedGroups.get(t.groupID) ?? 0) < 2
+            && !(t.groupID === PROPULSION_MODULE_GROUP && propUsed >= 1)) ?? cands[0]
         if (!m) break
+        if (m.groupID === PROPULSION_MODULE_GROUP) {
+            if (propUsed >= 1) { // would be a 2nd prop mod — pick a non-prop instead
+                const alt = cands.find(t => t.groupID !== PROPULSION_MODULE_GROUP && (usedGroups.get(t.groupID) ?? 0) < 2)
+                if (alt) m = alt
+                else continue
+            }
+            if (m.groupID === PROPULSION_MODULE_GROUP) propUsed++
+        }
         usedGroups.set(m.groupID, (usedGroups.get(m.groupID) ?? 0) + 1)
         out.push({ typeID: m.id, slotType: slot, state: defaultStateForModule(m, dataset.effects), chargeTypeID: chargeFor(dataset, m, r) })
     }
