@@ -21,6 +21,12 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-latest
+    # NPM_TOKEN is configured as a `prod` Environment secret — the job must
+    # declare the environment to access it. NOTE: if the `prod` environment has
+    # a required-reviewers protection rule, every run pauses for manual approval
+    # (even no-change days). For fully hands-off auto-publish, leave `prod`
+    # without protection rules, or move NPM_TOKEN to a repository secret.
+    environment: prod
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
