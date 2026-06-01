@@ -19,7 +19,7 @@ import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 import { loadBundledDataset, buildAllVSkillProfile } from '../../dist/node.js'
-import { computeFit } from '../../dist/index.js'
+import { computeFit, DAMAGE_PROFILE_PRESETS } from '../../dist/index.js'
 import { generateFits } from './fit-generator.mjs'
 import { oursToSchema, flatten, diffStats } from './stat-schema.mjs'
 
@@ -85,6 +85,10 @@ async function main() {
     }
     const dataset = await loadBundledDataset()
     const ALLV = buildAllVSkillProfile(dataset)
+    // The oracle sets a Uniform 25/25/25/25 damagePattern; pass the same so a
+    // Reactive Armor Hardener adapts identically (without a profile our RAH
+    // stays at base resonances and contributes nothing) and EHP is comparable.
+    const UNIFORM = DAMAGE_PROFILE_PRESETS.find(p => p.name === 'Uniform')
     const ships = resolveShips(dataset, args)
     console.error(`[diff] ${ships.length} ships × 4 fits, tol=${args.tol}`)
 
@@ -99,7 +103,7 @@ async function main() {
             const id = `${ship.id}:${spec.fitType}`
             let oursFlat = null
             try {
-                const c = computeFit(toOurFit(spec), dataset, { skillProfile: ALLV })
+                const c = computeFit(toOurFit(spec), dataset, { skillProfile: ALLV, damageProfile: UNIFORM })
                 oursFlat = flatten(oursToSchema(c.derived))
             } catch (e) { oursFlat = { __error: e.message } }
             items.push({ id, ship, fitType: spec.fitType, oursFlat })
