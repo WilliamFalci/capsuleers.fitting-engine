@@ -36,7 +36,13 @@ export function oursToSchema(d) {
         },
         offense: {
             weaponDps: off.weaponDps, droneDps: off.droneDps,
-            totalDps: off.totalDps, alphaStrike: off.alphaStrike,
+            totalDps: off.totalDps,
+            // pyfa's getWeaponVolley() is WEAPON-only (drones fire continuously,
+            // they have no synchronized volley). Our off.alphaStrike folds in
+            // drone+fighter alpha, so compare the weapon-only sum for parity.
+            alphaStrike: (off.breakdown ?? [])
+                .filter(b => b.kind === 'TURRET' || b.kind === 'MISSILE')
+                .reduce((s, b) => s + (b.alpha ?? 0), 0),
         },
         capacitor: {
             capacity: cap.capacity, stable: cap.stable,
