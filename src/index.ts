@@ -29,7 +29,7 @@ export { ATTR, CATEGORY, SLOT_EFFECT_ID, SLOT_EFFECT_TO_SLOT_TYPE, OPERATION_BY_
 export { ModifiedAttribute } from './modifiedAttribute'
 export { ItemState, type ItemKind } from './itemState'
 export { FitContext, moduleAcceptsCharge } from './fitContext'
-export { applySkills, applySourceItem, applyOneModifier, disintegratorSpoolBonus, disintegratorCyclesToFullSpool } from './modifierEngine'
+export { applySkills, applySourceItem, applyOneModifier, disintegratorSpoolBonus, disintegratorCyclesToFullSpool, LEGACY_HANDLED_EFFECT_IDS } from './modifierEngine'
 export { combineMultiplicative, combinePenalized, combineUnstacked } from './stacking'
 
 // ---- Derived stats (computed by computeFit; exported for direct use too) ----

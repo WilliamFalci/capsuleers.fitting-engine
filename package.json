@@ -43,6 +43,8 @@
     "build": "tsup",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
+    "drift": "node scripts/check-pyfa-drift.mjs",
+    "drift:update": "node scripts/check-pyfa-drift.mjs --update",
     "prepublishOnly": "npm run typecheck && npm run build"
   },
   "devDependencies": {
