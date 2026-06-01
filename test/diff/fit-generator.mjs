@@ -14,7 +14,7 @@
  *
  * A fit-spec is engine-agnostic: { shipTypeID, fitType, modules, drones, subsystems }.
  */
-import { typeFitsSlotType, isTurretWeapon, isMissileLauncher, canFitModuleOnShip, defaultStateForModule, chargeGroupsForModule, moduleAcceptsAnyCharge } from '../../dist/index.js'
+import { typeFitsSlotType, isTurretWeapon, isMissileLauncher, canFitModuleOnShip, defaultStateForModule, chargeGroupsForModule, moduleAcceptsAnyCharge, moduleAcceptsChargeType } from '../../dist/index.js'
 
 const META = { T1: 1, T2: 2, STORYLINE: 3, FACTION: 4, OFFICER: 5, DEADSPACE: 6 }
 const SLOTS = ['HI', 'MED', 'LO', 'RIG']
@@ -58,8 +58,10 @@ function buildPool(dataset) {
 
 function chargeFor(dataset, mod, r) {
     if (!moduleAcceptsAnyCharge(mod)) return undefined
-    const groups = new Set(chargeGroupsForModule(mod))
-    const cands = POOL.charges.filter(c => groups.has(c.groupID))
+    // Validate group AND size: an oversized charge (XL ammo in a small gun) is
+    // rejected by pyfa but our engine trusts whatever chargeTypeID it's given,
+    // so an invalid charge would manufacture a huge bogus DPS diff.
+    const cands = POOL.charges.filter(c => moduleAcceptsChargeType(mod, c))
     const c = pick(cands, r)
     return c?.id
 }

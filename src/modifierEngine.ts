@@ -874,6 +874,19 @@ const SHIP_ROLE_BONUS_ATTRS: ReadonlySet<number> = new Set([
     2302,  // shipBonusRole5
     2303,  // shipBonusRole6
     5952,  // shipBonusGasCloudDurationRoleBonusOreMiningDestroyer
+    // Rookie-ship (corvette) racial weapon DAMAGE bonuses. Effects 4991
+    // (shipSETDmgBonusRookie), 5020 (shipSPTDmgBonusRookie), the hybrid and
+    // missile equivalents apply these as a FLAT +10 % PostPercent on
+    // damageMultiplier of modules requiring the racial small-weapon skill.
+    // They're declared LocationRequiredSkillModifier with skillTypeID = that
+    // weapon skill, but the skill only SELECTS the recipient modules — the
+    // bonus is NOT per-level. Without these entries the ship-side reader
+    // scaled +10 % × (Small Energy Turret V) → +50 %, inflating rookie-ship
+    // turret DPS ~36 % (Impairor lasers, Reaper artillery, …).
+    1823,  // rookieSETDamageBonus  (Small Energy Turret  — Amarr)
+    1827,  // rookieMissileKinDamageBonus (missiles        — Caldari)
+    1830,  // rookieSHTDamageBonus  (Small Hybrid Turret   — Gallente/Caldari)
+    1836,  // rookieSPTDamageBonus  (Small Projectile Turret — Minmatar)
     1989,  // probeLauncherCPUPercentRoleBonusT3 value — effect 6009 on T3C hulls
            //   (Loki/Tengu/…): "-99 % CPU for Scan Probe Launchers". Declared as
            //   LocationRequiredSkillModifier gated on Astrometrics (3412), but
