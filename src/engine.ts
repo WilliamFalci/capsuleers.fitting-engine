@@ -505,6 +505,10 @@ function buildProjectionReport(source: ItemState, ctx: FitContext): ProjectedEff
     }
 }
 
+/** Base lockable-target count every capsuleer has before targeting skills —
+ *  Pyfa seeds `maxTargetsLockedFromSkills` at 2 (eos/saveddata/ship.py). */
+const CHAR_BASE_MAX_LOCKED_TARGETS = 2
+
 function deriveStats(
     ctx: FitContext,
     dataset: FittingDataset,
@@ -642,7 +646,18 @@ function deriveStats(
                 ship.getFinal(ATTR.MAX_TARGET_RANGE, 0),
                 ship.getFinal(ATTR.MAX_TARGET_RANGE_CAP, 300_000),
             ),
-            maxLockedTargets: ship.getFinal(ATTR.MAX_LOCKED_TARGETS, 0),
+            // In-game lockable-target count is the LOWER of the ship's
+            // maxLockedTargets and the pilot's skill-derived cap. Pyfa:
+            // ceil(min(maxTargetsLockedFromSkills, ship maxLockedTargets)),
+            // where maxTargetsLockedFromSkills seeds at a base of 2 (every
+            // capsuleer locks 2 without skills) + Target Management / Advanced
+            // Target Management (+1/level each) → 2 + 5 + 5 = 12 at All-V. The
+            // character item carries only the skill ModAdds (10), so add the
+            // base 2. Without the char cap, high-slot capitals reported 14-20.
+            maxLockedTargets: Math.ceil(Math.min(
+                CHAR_BASE_MAX_LOCKED_TARGETS + ctx.character.getFinal(ATTR.MAX_LOCKED_TARGETS, 0),
+                ship.getFinal(ATTR.MAX_LOCKED_TARGETS, 0),
+            )),
             signatureRadius: ship.getFinal(ATTR.SIGNATURE_RADIUS, 0),
             scanResolution: ship.getFinal(ATTR.SCAN_RESOLUTION, 0),
             sensorStrength: pickSensorStrength(ship).value,
