@@ -5,6 +5,8 @@ dist/
 .idea/
 .vscode/
 *.tsbuildinfo
-# Never commit SDE data into this repo — it is CCP's, not GPL-able.
+# Raw SDE source staged by scripts/fetch-sde.mjs — large + CCP-owned, ephemeral.
+# (The FILTERED bundle under data/ IS committed/shipped; the raw source is not.)
+/.sde-src/
 /fixtures/sde/
 /*.jsonl

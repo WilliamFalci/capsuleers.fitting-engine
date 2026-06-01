@@ -14,10 +14,11 @@ projected effects, and structure fuel/service stats.
 
 ## Design
 
-- **Framework-free.** No `fetch`, no `fs`, no `window`, no npm runtime deps. Runs
-  in the browser, in Node, in a worker — anywhere.
-- **No game data inside.** The package ships zero EVE SDE data (that is CCP's,
-  under CCP's own licence). You inject a `FittingDataset` built however you like.
+- **Framework-free core.** The base entry has no `fetch`, no `fs`, no `window`,
+  no npm runtime deps. Runs in the browser, in Node, in a worker — anywhere.
+- **Two entries.** Base (`.`): inject your own `FittingDataset`. Node (`./node`):
+  batteries-included — bundles a snapshot of the EVE SDE (under CCP's licence, by
+  mere aggregation) + an fs loader, so it works out of the box on the server.
 - **Validated against Pyfa.** Stat parity is verified against Pyfa screenshots in
   the upstream capsuleers.app fixture suite (`npm run test:pyfa`, 631 assertions
   at All-V skills, zero tolerance overrides).
@@ -28,32 +29,56 @@ projected effects, and structure fuel/service stats.
 npm install @capsuleers/eve-fit-engine
 ```
 
-## Usage
+## Usage — zero-config (Node, batteries-included)
+
+The `/node` entry ships with the EVE SDE bundle (`data/`, ~8 MB) and a built-in
+loader. Give it an EFT string, get full stats — nothing else to set up:
+
+```ts
+import { computeFromEft } from '@capsuleers/eve-fit-engine/node'
+
+const { fit, warnings, computed } = await computeFromEft(`
+[Rifter, My Fit]
+200mm AutoCannon II, Republic Fleet EMP S
+200mm AutoCannon II, Republic Fleet EMP S
+1MN Afterburner II
+Gyrostabilizer II
+`)
+
+console.log(computed.derived.offense.totalDps)              // 197.6
+console.log(computed.derived.defense.ehpTotalAgainstProfile)
+console.log(computed.derived.navigation.maxVelocity)
+```
+
+Defaults to All-V skills; pass `{ skillProfile, damageProfile, targetProfile, … }`
+as the second arg to override. `loadBundledDataset()` is also exported if you
+want the dataset directly.
+
+> The bundled SDE is CCP's, under CCP's EVE Online Developer License (see
+> [`data/SDE-LICENSE.md`](./data/SDE-LICENSE.md)) — included by mere aggregation,
+> NOT under this package's GPL.
+
+## Usage — bring-your-own dataset (browser / custom / always-fresh SDE)
+
+The base entry is environment-free (no `fs`, no bundled data). Inject a
+`FittingDataset` you build however you like:
 
 ```ts
 import { computeFit, parseEft, type FittingDataset } from '@capsuleers/eve-fit-engine'
 
-// You provide the dataset (SDE attributes/effects/types). See the FittingDataset
-// type for the exact shape. capsuleers.app builds it from the EVE SDE; you can
-// build it from the SDE, from fuzzwork, or from your own export.
-const dataset: FittingDataset = await buildYourDataset()
-
-const fit = parseEft(eftText, dataset)            // EFT string -> Fit
-const computed = computeFit(fit, dataset, {
-    skillProfile,                                  // e.g. all-level-V
-    damageProfile,
-    targetProfile,
-})
-
-console.log(computed.derived.offense.totalDps)
-console.log(computed.derived.defense.ehpTotalAgainstProfile)
+const dataset: FittingDataset = await buildYourDataset()   // your SDE bundle
+const { fit } = parseEft(eftText, dataset)
+const computed = computeFit(fit, dataset, { skillProfile /* … */ })
 ```
+
+This is what capsuleers.app uses server-side: it builds its own always-fresh
+bundle and injects it, so it never depends on the (snapshot) bundled data.
 
 ## What's NOT in this package
 
-- The dataset **loader** (HTTP or fs) — environment-specific, you supply it.
-- EVE **SDE data** — CCP's, shipped separately under CCP's terms.
 - 3D ship models, UI components — those live in the consuming application.
+- The bundled SDE is a **snapshot**; for always-fresh data, inject your own via
+  the base entry (see above).
 
 ## Provenance / how parity is maintained
 

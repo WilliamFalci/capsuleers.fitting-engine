@@ -15,26 +15,33 @@
     "eft"
   ],
   "author": "Capsuleers.app",
-  "homepage": "https://github.com/capsuleers/eve-fit-engine",
+  "homepage": "https://github.com/WilliamFalci/capsuleers.fitting-engine",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/capsuleers/eve-fit-engine.git"
+    "url": "git+https://github.com/WilliamFalci/capsuleers.fitting-engine.git"
   },
   "bugs": {
-    "url": "https://github.com/capsuleers/eve-fit-engine/issues"
+    "url": "https://github.com/WilliamFalci/capsuleers.fitting-engine/issues"
   },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
-    }
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "import": "./dist/node.js",
+      "require": "./dist/node.cjs"
+    },
+    "./package.json": "./package.json"
   },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
     "dist",
+    "data",
     "LICENSE",
     "NOTICE",
     "README.md"
@@ -43,12 +50,18 @@
     "build": "tsup",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
+    "build:data": "node scripts/fetch-sde.mjs && tsx scripts/build-bundle.ts",
+    "test:pyfa": "tsx test/parity/run-pyfa-parity.ts",
+    "audit:coverage": "tsx test/effect-coverage-audit.ts",
     "drift": "node scripts/check-pyfa-drift.mjs",
     "drift:update": "node scripts/check-pyfa-drift.mjs --update",
     "prepublishOnly": "npm run typecheck && npm run build"
   },
   "devDependencies": {
+    "@types/node": "^22.19.19",
+    "adm-zip": "^0.5.16",
     "tsup": "^8.3.5",
+    "tsx": "^4.20.3",
     "typescript": "^5.7.2"
   },
   "publishConfig": {

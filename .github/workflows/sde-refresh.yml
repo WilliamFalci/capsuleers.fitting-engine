@@ -1,0 +1,80 @@
+name: sde-refresh
+
+# Self-updating dataset. Daily, rebuild the bundled SDE from CCP's latest
+# official JSONL export. If it changed AND parity + coverage stay green, bump a
+# patch version, commit the new data/, and auto-publish to npm. If parity fails
+# (a real CCP change broke an assumption), open an issue and DO NOT publish.
+
+on:
+  schedule:
+    - cron: '0 5 * * *'   # daily 05:00 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: sde-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+      - run: npm ci
+
+      - name: Rebuild dataset from latest CCP SDE
+        run: npm run build:data
+
+      - name: Detect dataset change
+        id: chg
+        run: |
+          if git diff --quiet -- data; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No dataset change — up to date."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Dataset changed (new SDE build $(cat data/.build))."
+          fi
+
+      - name: Parity + coverage gate
+        if: steps.chg.outputs.changed == 'true'
+        id: gate
+        run: |
+          set +e
+          npm run test:pyfa && npm run audit:coverage
+          echo "ok=$?" >> "$GITHUB_OUTPUT"
+          set -e
+
+      - name: Bump, commit & publish (green)
+        if: steps.chg.outputs.changed == 'true' && steps.gate.outputs.ok == '0'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          git config user.name  "capsuleers-bot"
+          git config user.email "bot@capsuleers.app"
+          git add data
+          npm version patch -m "chore(data): refresh SDE bundle to build $(cat data/.build) [auto] %s"
+          npm publish --access public   # prepublishOnly runs typecheck + build
+          git push --follow-tags
+
+      - name: Open issue (parity failed)
+        if: steps.chg.outputs.changed == 'true' && steps.gate.outputs.ok != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `SDE refresh failed parity (build ${require('fs').readFileSync('data/.build','utf8').trim()})`,
+              body: 'A new CCP SDE changed the dataset, but `test:pyfa` / `audit:coverage` failed — NOT published.\n\n' +
+                    'Likely a real EVE balance/mechanic change. Reproduce locally with `npm run build:data && npm run test:pyfa`, ' +
+                    'update fixtures/handlers as needed, then let the next run publish.',
+              labels: ['sde-refresh'],
+            })
