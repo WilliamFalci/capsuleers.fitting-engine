@@ -104,6 +104,16 @@ export function applySourceItem(
     dataset: FittingDataset,
 ): void {
     const isLocalModule = source.kind === 'module'
+    // Two-phase application: a source's SELF modifiers (domain itemID — the item
+    // modifying its own attributes) must run BEFORE its OUTGOING modifiers that
+    // READ those attributes. Example: an Assault Damage Control's active effect
+    // (7012) PostAssigns the item's own resist-multiplier attrs (974-977) to the
+    // "activated" value (0.25), and its passive effect (2302) then reads 974 to
+    // multiply the ship's hull resonance. Applying 2302 before 7012 reads the
+    // un-activated 0.75 → ~half the real resist. Self-first matches eos's lazy
+    // attribute resolution.
+    const selfMods: Array<{ effect: SdeEffect; mi: SdeModifierInfo }> = []
+    const outMods: Array<{ effect: SdeEffect; mi: SdeModifierInfo }> = []
     for (const eid of source.effectIDs) {
         // Effects claimed by hardcoded handlers (e.g. T3C subsystem
         // "*AddPassive" HP bonuses) must NOT be re-applied here, or the
@@ -120,9 +130,11 @@ export function applySourceItem(
         if (!effect) continue
         if (!source.appliesAtState(effect)) continue
         for (const mi of effect.modifierInfo) {
-            applyOneModifier(source, effect, mi, ctx, dataset)
+            (mi.domain === 'itemID' ? selfMods : outMods).push({ effect, mi })
         }
     }
+    for (const { effect, mi } of selfMods) applyOneModifier(source, effect, mi, ctx, dataset)
+    for (const { effect, mi } of outMods) applyOneModifier(source, effect, mi, ctx, dataset)
 }
 
 /**
