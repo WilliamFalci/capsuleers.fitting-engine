@@ -46,9 +46,15 @@ function buildPool(dataset) {
     const all = [...(dataset.typesByBucket.modules?.values() ?? [])].filter(t => t.published !== false)
     const bySlot = { HI: [], MED: [], LO: [], RIG: [] }
     for (const t of all) for (const s of SLOTS) if (typeFitsSlotType(t, s)) bySlot[s].push(t)
-    // Exclude Polarized weapons as primary armament — they zero all resists
-    // (a niche edge case) and aren't representative of a normal fit.
-    const normal = (t) => !/Polarized/i.test(t.name ?? '')
+    // Exclude weapons that aren't representative standard DPS armament:
+    //  - Polarized weapons zero all resists (niche edge case).
+    //  - Special launcher families that pyfa models with bespoke damage
+    //    semantics no normal fit uses for DPS: Defender (512, point-defense),
+    //    Bomb (862, delayed AoE), Breacher Pod (4807, % DoT), Festival (501).
+    //    The generator's "non-bonused = other weapon system" would otherwise
+    //    arm a turret hull with these and manufacture huge bogus DPS diffs.
+    const SPECIAL_WEAPON_GROUPS = new Set([512, 862, 4807, 501])
+    const normal = (t) => !/Polarized/i.test(t.name ?? '') && !SPECIAL_WEAPON_GROUPS.has(t.groupID)
     const turrets = bySlot.HI.filter(t => isTurretWeapon(t) && normal(t))
     const launchers = bySlot.HI.filter(t => isMissileLauncher(t) && normal(t))
     const charges = [...(dataset.typesByBucket.charges?.values() ?? [])].filter(t => t.published !== false)
