@@ -192,18 +192,24 @@ export class FitContext {
         const root = this.resolveDomain(modifier.domain, source)
         switch (modifier.func) {
             case 'ItemModifier':
-                // BCS-style charge boost (Pyfa-parity): module sources that
-                // emit ItemModifier with `domain="charID"` target their
-                // OWN LOADED CHARGE — not the character. Effect 763
-                // `missileDMGBonus` (and 107 `characterMissileDamageMultiply`)
-                // are the canonical examples: a Ballistic Control System's
-                // attr_213 boosts attr_212 (`missileDamageMultiplier`) on the
-                // charge inside any sibling missile launcher. The SDE's
-                // `charID` domain alias is overloaded: skill effects mean
-                // "the character's owned items", but module ItemModifier means
-                // "the loaded charge". Without this re-routing, BCS damage
-                // bonuses silently miss (~17 % missile DPS on a 2-BCS fit).
-                if (modifier.domain === 'charID' && source.kind === 'module') {
+                // BCS-style charge boost (Pyfa-parity): a module ItemModifier
+                // with `domain="charID"` that targets `missileDamageMultiplier`
+                // (attr 212) boosts its sibling launchers' LOADED CHARGES, not
+                // the character. Effect 763 `missileDMGBonus` is the canonical
+                // example: a Ballistic Control System's attr_213 PreMul-boosts
+                // attr_212 on the ammo inside any missile launcher. Without
+                // this re-routing BCS damage silently misses (~17 % missile DPS
+                // on a 2-BCS fit).
+                //
+                // This re-route is SCOPED to attr 212 — other module
+                // charID-ItemModifier effects legitimately target the CHARACTER
+                // (Drone Link Augmentor → droneControlDistance attr 458, Drone
+                // Control Unit → maxActiveDrones attr 352, etc.). Routing those
+                // to the (non-existent) loaded charge dropped the bonus
+                // entirely — e.g. a Drone Link Augmentor added 0 km of drone
+                // control range instead of +20/+24 km.
+                if (modifier.domain === 'charID' && source.kind === 'module'
+                    && modifier.modifiedAttributeID === 212) {
                     const out: ItemState[] = []
                     for (const m of this.modules) {
                         if (m.charge) out.push(m.charge)
