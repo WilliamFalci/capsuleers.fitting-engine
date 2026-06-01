@@ -56,11 +56,12 @@ const toOurFit = (spec) => ({
     modules: spec.modules, fighters: [], cargo: [], implants: [], boosters: [],
     drones: spec.drones.map((d, i) => ({ id: `d${i}`, typeID: d.typeID, countTotal: d.count, countActive: d.active })),
     subsystems: spec.subsystems.map((s, i) => ({ id: `s${i}`, slot: i + 1, typeID: s.typeID })),
+    modeTypeID: spec.modeTypeID,
 })
 const toOracleSpec = (spec, id) => ({
     id, shipTypeID: spec.shipTypeID,
     modules: spec.modules.map(m => ({ typeID: m.typeID, state: m.state, chargeTypeID: m.chargeTypeID })),
-    drones: spec.drones, subsystems: spec.subsystems,
+    drones: spec.drones, subsystems: spec.subsystems, modeTypeID: spec.modeTypeID,
 })
 
 function runOracle(specs) {

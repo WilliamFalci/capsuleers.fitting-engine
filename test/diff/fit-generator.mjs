@@ -20,6 +20,23 @@ const META = { T1: 1, T2: 2, STORYLINE: 3, FACTION: 4, OFFICER: 5, DEADSPACE: 6 
 const SLOTS = ['HI', 'MED', 'LO', 'RIG']
 const STRATEGIC_CRUISER_GROUP = 963
 const SUBSYSTEM_GROUPS = [954, 955, 956, 957, 958] // defensive/electronic/offensive/propulsion/core
+const TACTICAL_DESTROYER_GROUP = 1305
+const SHIP_MODIFIERS_GROUP = 1306   // T3D mode items live here ("<Ship> Defense Mode" etc.)
+
+/** A T3D in-game ALWAYS has a mode active; pyfa auto-assigns modeItems[0] when
+ *  none is set — the lowest-typeID mode whose name starts with the ship name
+ *  (the Defense Mode). Replicate so resists / sig / speed / targeting match. */
+function defaultModeTypeID(dataset, ship) {
+    if (ship.groupID !== TACTICAL_DESTROYER_GROUP) return undefined
+    const prefix = (ship.name ?? '').toLowerCase()
+    let best = null
+    for (const t of (dataset.typesByBucket.modules?.values() ?? [])) {
+        if (t.groupID !== SHIP_MODIFIERS_GROUP) continue
+        if (!(t.name ?? '').toLowerCase().startsWith(prefix)) continue
+        if (best === null || t.id < best.id) best = t
+    }
+    return best?.id
+}
 
 const attrV = (t, id) => t.attributes?.find?.(a => a.id === id)?.v
 /** Reject size-inappropriate modules: a rig whose rigSize != the ship's, or any
@@ -151,6 +168,7 @@ export function generateFits(dataset, ship, computeFit, skillProfile) {
     const pool = buildPool(dataset)
     const isT3C = ship.groupID === STRATEGIC_CRUISER_GROUP
     const subsystems = isT3C ? chooseSubsystems(dataset, ship) : []
+    const modeTypeID = defaultModeTypeID(dataset, ship)
 
     // Resolve real slot/hardpoint/drone capacities via our engine (handles T3C).
     const base = { shipTypeID: ship.id, name: 'base', visibility: 'PRIVATE', tags: [], modules: [], drones: [], fighters: [], cargo: [], implants: [], boosters: [], subsystems: subsystems.map((s, i) => ({ id: `s${i}`, slot: i + 1, typeID: s.typeID })) }
@@ -181,7 +199,7 @@ export function generateFits(dataset, ship, computeFit, skillProfile) {
             ...fillSlot(dataset, ship, pool, 'LO', lo, metaForSlot, r, cpuMax, pgMax),
             ...fillSlot(dataset, ship, pool, 'RIG', rig, metaForSlot, r, cpuMax, pgMax),
         ].map((m, i) => ({ id: `m${i}`, position: i, ...m }))
-        return { shipTypeID: ship.id, fitType, modules: mods, drones: droneSet(dataset, bayMax, bwMax, r), subsystems }
+        return { shipTypeID: ship.id, fitType, modules: mods, drones: droneSet(dataset, bayMax, bwMax, r), subsystems, modeTypeID }
     }
 
     return [
