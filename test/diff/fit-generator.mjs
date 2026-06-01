@@ -136,8 +136,10 @@ function chooseSubsystems(dataset, ship) {
     return out
 }
 
-/** Generate the 4 fit-specs for a ship. `computeFit` is used to resolve slots. */
-export function generateFits(dataset, ship, computeFit) {
+/** Generate the 4 fit-specs for a ship. `computeFit` is used to resolve slots.
+ *  `skillProfile` MUST be a real All-V profile (skills populated) so the resolved
+ *  CPU/PG/drone caps match what both engines actually compute. */
+export function generateFits(dataset, ship, computeFit, skillProfile) {
     const pool = buildPool(dataset)
     const isT3C = ship.groupID === STRATEGIC_CRUISER_GROUP
     const subsystems = isT3C ? chooseSubsystems(dataset, ship) : []
@@ -146,7 +148,7 @@ export function generateFits(dataset, ship, computeFit) {
     const base = { shipTypeID: ship.id, name: 'base', visibility: 'PRIVATE', tags: [], modules: [], drones: [], fighters: [], cargo: [], implants: [], boosters: [], subsystems: subsystems.map((s, i) => ({ id: `s${i}`, slot: i + 1, typeID: s.typeID })) }
     let cap
     try {
-        const c = computeFit(base, dataset, { skillProfile: { name: 'All V', isDefault: true, source: 'preset', skills: {} } })
+        const c = computeFit(base, dataset, { skillProfile })
         cap = c.derived.fitting
     } catch { cap = null }
     const slotMax = (s) => cap?.slots?.[s]?.max ?? 0

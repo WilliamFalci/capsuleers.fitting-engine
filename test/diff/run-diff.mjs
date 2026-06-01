@@ -18,14 +18,13 @@ import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
-import { loadBundledDataset } from '../../dist/node.js'
+import { loadBundledDataset, buildAllVSkillProfile } from '../../dist/node.js'
 import { computeFit } from '../../dist/index.js'
 import { generateFits } from './fit-generator.mjs'
 import { oursToSchema, flatten, diffStats } from './stat-schema.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const PYFA = resolve(HERE, '../../.pyfa')
-const ALLV = { name: 'All V', isDefault: true, source: 'preset', skills: {} }
 
 function parseArgs(argv) {
     const a = { tol: 0.01, eps: 0.01 }
@@ -85,6 +84,7 @@ async function main() {
         console.error('Oracle not set up. Run: npm run diff:setup'); process.exit(2)
     }
     const dataset = await loadBundledDataset()
+    const ALLV = buildAllVSkillProfile(dataset)
     const ships = resolveShips(dataset, args)
     console.error(`[diff] ${ships.length} ships × 4 fits, tol=${args.tol}`)
 
@@ -93,7 +93,7 @@ async function main() {
     const oracleSpecs = []
     for (const ship of ships) {
         let fits
-        try { fits = generateFits(dataset, ship, computeFit) } catch (e) { console.error(`[gen] ${ship.name}: ${e.message}`); continue }
+        try { fits = generateFits(dataset, ship, computeFit, ALLV) } catch (e) { console.error(`[gen] ${ship.name}: ${e.message}`); continue }
         for (const spec of fits) {
             if (args.only && !args.only.includes(spec.fitType)) continue
             const id = `${ship.id}:${spec.fitType}`

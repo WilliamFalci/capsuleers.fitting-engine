@@ -261,6 +261,7 @@ const CAP_BOOSTER_EFFECT_ID = 48
 const ATTR_CAPACITOR_BONUS = 67
 const ATTR_CAPACITOR_NEED  = 6
 const ATTR_DURATION_MS     = 73
+const ATTR_REACTIVATION_MS = 669
 const ATTR_RELOAD_TIME     = 1795
 const ATTR_CAPACITY        = 38
 const ATTR_VOLUME          = 161
@@ -302,10 +303,15 @@ function drainEntryFromEffect(effect: SdeEffect, mod: ItemState): DrainEntry | n
     if (effect.dischargeAttributeID === undefined) return null
     const discharge = mod.getFinal(effect.dischargeAttributeID, 0)
     if (discharge <= 0) return null
-    const cycleMs = effect.durationAttributeID !== undefined
+    const baseCycleMs = effect.durationAttributeID !== undefined
         ? mod.getFinal(effect.durationAttributeID, 0)
         : 1000  // fallback for no-duration discharge effects
-    if (cycleMs <= 0) return null
+    if (baseCycleMs <= 0) return null
+    // Pyfa charges cap over the FULL cycle = duration + moduleReactivationDelay
+    // (fit.py __generateDrain). Modules with a long reactivation lockout (Warp
+    // Core Stabilizer 150 s, MJD, cloaks) drain far less per second than their
+    // bare duration implies; without this we overstate their cap usage ~11×.
+    const cycleMs = baseCycleMs + mod.getFinal(ATTR_REACTIVATION_MS, 0)
     return {
         cycleMs,
         capNeed: discharge,

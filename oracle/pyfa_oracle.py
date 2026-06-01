@@ -125,6 +125,14 @@ def stats(fit):
 
     hp = fit.hp or {}
     ehp = fit.ehp or {}
+    # Drone control range is a FIT-level extra attribute (base 20km on the ship,
+    # increased by Drone Avionics / Advanced Drone Avionics skills), NOT a ship
+    # hull attribute — read it from extraAttributes so All-V skills are applied.
+    try:
+        drone_ctrl = _num(fit.extraAttributes["droneControlRange"])
+    except Exception:
+        drone_ctrl = None
+    drone_ctrl_km = (drone_ctrl / 1000.0) if drone_ctrl else None
     wdps = fit.getWeaponDps(); ddps = fit.getDroneDps(); tdps = fit.getTotalDps()
     wvol = fit.getWeaponVolley()
 
@@ -160,7 +168,7 @@ def stats(fit):
             "scanResolution": _num(S("scanResolution")),
             "sensorStrength": _num(fit.scanStrength),
             "maxLockedTargets": _num(fit.maxTargets),
-            "droneControlRange": _num(S("droneControlDistance") and S("droneControlDistance") / 1000.0) if S("droneControlDistance") else None,
+            "droneControlRange": drone_ctrl_km,
         },
     }
 
