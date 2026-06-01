@@ -1,5 +1,8 @@
 node_modules/
 dist/
+# Pyfa headless oracle for differential parity testing — cloned + venv + built
+# eve.db (~100MB), reproduced by scripts/setup-pyfa-oracle.sh. Never committed.
+.pyfa/
 *.log
 .DS_Store
 .idea/

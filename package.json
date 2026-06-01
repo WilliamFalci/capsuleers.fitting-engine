@@ -51,6 +51,8 @@
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
     "build:data": "node scripts/fetch-sde.mjs && tsx scripts/build-bundle.ts",
+    "diff:setup": "bash scripts/setup-pyfa-oracle.sh",
+    "diff": "node test/diff/run-diff.mjs",
     "test:pyfa": "tsx test/parity/run-pyfa-parity.ts",
     "audit:coverage": "tsx test/effect-coverage-audit.ts",
     "drift": "node scripts/check-pyfa-drift.mjs",
