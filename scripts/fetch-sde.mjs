@@ -1,5 +1,5 @@
 /**
- * Autonomous EVE SDE acquisition for @capsuleers/eve-fit-engine.
+ * Autonomous EVE SDE acquisition for eve-fit-engine.
  *
  * Downloads CCP's OFFICIAL JSONL Static Data Export and stages the .jsonl files
  * into `.sde-src/` (gitignored, ephemeral) for `build-bundle.ts` to consume.

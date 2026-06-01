@@ -1,12 +1,12 @@
 /**
- * Batteries-included Node entry: `@capsuleers/eve-fit-engine/node`.
+ * Batteries-included Node entry: `eve-fit-engine/node`.
  *
- * The base entry (`@capsuleers/eve-fit-engine`) is environment-free and needs a
+ * The base entry (`eve-fit-engine`) is environment-free and needs a
  * `FittingDataset` injected. THIS entry ships with the EVE SDE bundle (under
  * `data/`, ~8 MB) and a Node fs loader, so a consumer can go from an EFT string
  * to full stats with zero setup:
  *
- *   import { computeFromEft } from '@capsuleers/eve-fit-engine/node'
+ *   import { computeFromEft } from 'eve-fit-engine/node'
  *   const { computed } = await computeFromEft(eftString)
  *   computed.derived.offense.totalDps // ...
  *

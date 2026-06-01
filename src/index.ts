@@ -1,5 +1,5 @@
 /**
- * @capsuleers/eve-fit-engine — public surface.
+ * eve-fit-engine — public surface.
  *
  * A Pyfa-parity EVE Online fitting calculation engine. Given a `Fit` and a
  * `FittingDataset`, `computeFit` returns the full derived stat block

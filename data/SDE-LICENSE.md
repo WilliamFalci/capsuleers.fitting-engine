@@ -14,4 +14,4 @@ is not relicensed by, the GPL-covered program.
 
 To run the engine against a fresher or custom SDE, build your own
 `FittingDataset` and use `computeFit` from the base entry instead of the bundled
-`@capsuleers/eve-fit-engine/node` loader.
+`eve-fit-engine/node` loader.

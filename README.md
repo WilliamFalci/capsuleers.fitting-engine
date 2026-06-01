@@ -1,4 +1,4 @@
-# @capsuleers/eve-fit-engine
+# eve-fit-engine
 
 A **Pyfa-parity** EVE Online ship & Upwell-structure fitting calculation engine,
 extracted from [capsuleers.app](https://capsuleers.app). Given a fit and an SDE
@@ -26,7 +26,7 @@ projected effects, and structure fuel/service stats.
 ## Install
 
 ```bash
-npm install @capsuleers/eve-fit-engine
+npm install eve-fit-engine
 ```
 
 ## Usage — zero-config (Node, batteries-included)
@@ -35,7 +35,7 @@ The `/node` entry ships with the EVE SDE bundle (`data/`, ~8 MB) and a built-in
 loader. Give it an EFT string, get full stats — nothing else to set up:
 
 ```ts
-import { computeFromEft } from '@capsuleers/eve-fit-engine/node'
+import { computeFromEft } from 'eve-fit-engine/node'
 
 const { fit, warnings, computed } = await computeFromEft(`
 [Rifter, My Fit]
@@ -64,7 +64,7 @@ The base entry is environment-free (no `fs`, no bundled data). Inject a
 `FittingDataset` you build however you like:
 
 ```ts
-import { computeFit, parseEft, type FittingDataset } from '@capsuleers/eve-fit-engine'
+import { computeFit, parseEft, type FittingDataset } from 'eve-fit-engine'
 
 const dataset: FittingDataset = await buildYourDataset()   // your SDE bundle
 const { fit } = parseEft(eftText, dataset)

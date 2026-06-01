@@ -4,26 +4,26 @@ Everything in the package is built, tested (parity 631/0, coverage 0 silent) and
 publish-verified (`npm publish --dry-run` → 906 kB tarball with dist/ + data/).
 The steps below need **your npm + GitHub credentials** and so must be run by you.
 
-## 0. Decide the npm scope (one-time)
+## 0. Check the name is free (one-time)
 
-The package name is `@capsuleers/eve-fit-engine`. The `@capsuleers` scope needs an
-npm **org or user** called `capsuleers`. Pick one:
+The package is **unscoped**: `eve-fit-engine`. Confirm it's available before
+publishing:
 
-- **Create the org** (free for public packages): https://www.npmjs.com/org/create → `capsuleers`. Recommended.
-- **Or rename** in `package.json` to an unscoped/own-scope name you control, e.g.
-  `eve-fit-engine` (if free) or `@williamfalci/eve-fit-engine`. If you rename,
-  also update the `@capsuleers/eve-fit-engine` import paths in `src/node.ts`
-  docs/README and the app's consumer imports.
+```bash
+npm view eve-fit-engine   # expect E404 (free). If it returns a package, the
+                          # name is taken — rename in package.json + re-run the
+                          # repo-wide rename, e.g. to @williamfalci/eve-fit-engine.
+```
 
 ## 1. First publish (manual, one-time)
 
 ```bash
 cd Capsuleers.FitEngine
-npm login                       # your npm account
-npm publish --access public     # runs prepublishOnly (typecheck + build)
+npm login                # your npm account
+npm publish              # unscoped public package; runs prepublishOnly (typecheck + build)
 ```
 
-After this, `npm view @capsuleers/eve-fit-engine version` → `0.1.0`.
+After this, `npm view eve-fit-engine version` → `0.1.0`.
 
 > Subsequent data updates publish **automatically** via `.github/workflows/sde-refresh.yml`
 > (it only publishes when the SDE actually changes + parity stays green).
@@ -42,8 +42,8 @@ After this, `npm view @capsuleers/eve-fit-engine version` → `0.1.0`.
 In `Capsuleers.Site/package.json`, change the dependency:
 
 ```diff
-- "@capsuleers/eve-fit-engine": "file:../Capsuleers.FitEngine",
-+ "@capsuleers/eve-fit-engine": "^0.1.0",
+- "eve-fit-engine": "file:../Capsuleers.FitEngine",
++ "eve-fit-engine": "^0.1.0",
 ```
 
 Then `npm install` in the app. **Required before the Docker build** — the `file:`

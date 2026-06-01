@@ -1673,7 +1673,7 @@ async function runFit(testFit: TestFit, dataset: FittingDataset, skillProfile: S
 }
 
 async function main() {
-    console.log('Loading SDE bundle from the npm package (@capsuleers/eve-fit-engine/node)...')
+    console.log('Loading SDE bundle from the npm package (eve-fit-engine/node)...')
     const dataset = await loadBundledDataset()
     // Pre-load every bucket the fits might need. loadDataset only loads the
     // baseline (attributes/effects/groups/categories/...); the per-category

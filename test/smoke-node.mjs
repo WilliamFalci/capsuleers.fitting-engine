@@ -1,5 +1,5 @@
 /**
- * Batteries-included smoke: prove `@capsuleers/eve-fit-engine/node` computes
+ * Batteries-included smoke: prove `eve-fit-engine/node` computes
  * from an EFT string with ZERO setup (bundled SDE, default All-V skills).
  */
 import { computeFromEft } from '../dist/node.js'
