@@ -249,12 +249,19 @@ export function computeFit(
         ctx.stoppedLocalEffectIDs = collectEffectStoppers(earlyProjected, dataset)
     }
 
-    for (const m of modules) applySourceItem(m, ctx, dataset)
-    // Charges: each loaded charge carries its own effects (e.g. faction
-    // crystal range/falloff modifiers, scripted ammo damage shifts). Apply
-    // them as their own source so domain='otherID' (parent module) and
-    // domain='self' (charge attributes) resolve correctly.
+    // Charges BEFORE modules: a loaded charge carries effects that modify
+    // its PARENT MODULE via domain='otherID' (sensor-booster / tracking-
+    // computer scripts that double one bonus and zero another; faction
+    // crystal range/falloff/damage shifts). The module's own outgoing
+    // (module→ship) modifiers read those bonus attributes when computing
+    // their value EAGERLY, so the charge's modification must already be on
+    // the module before the module is processed — otherwise a Scan
+    // Resolution Script's "× scanResolutionBonus, zero maxTargetRangeBonus"
+    // lands too late and the ship sees the unscripted bonus. Charge value
+    // reads only touch charge-side attributes (modifyingAttributeID lives on
+    // the charge), so this ordering is safe for the charge's own modifiers.
     for (const m of modules) if (m.charge) applySourceItem(m.charge, ctx, dataset)
+    for (const m of modules) applySourceItem(m, ctx, dataset)
     for (const d of drones) applySourceItem(d, ctx, dataset)
     for (const f of fighters) applySourceItem(f, ctx, dataset)
     for (const i of implants) applySourceItem(i, ctx, dataset)
