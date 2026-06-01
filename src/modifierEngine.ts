@@ -887,6 +887,11 @@ const SHIP_ROLE_BONUS_ATTRS: ReadonlySet<number> = new Set([
     1827,  // rookieMissileKinDamageBonus (missiles        — Caldari)
     1830,  // rookieSHTDamageBonus  (Small Hybrid Turret   — Gallente/Caldari)
     1836,  // rookieSPTDamageBonus  (Small Projectile Turret — Minmatar)
+    1831,  // rookieDroneBonus — drone damageMultiplier (attr 64) + HP (attr 9)
+           //   on drone-rookie hulls (Velator/Ibis/…). Effect
+           //   shipBonusDroneDamageMultiplierRookie is OwnerRequiredSkillModifier
+           //   gated on Drones (3436); the skill only selects the recipient
+           //   drones, the +20 % is flat. Was scaling × Drones V → +100 %.
     1989,  // probeLauncherCPUPercentRoleBonusT3 value — effect 6009 on T3C hulls
            //   (Loki/Tengu/…): "-99 % CPU for Scan Probe Launchers". Declared as
            //   LocationRequiredSkillModifier gated on Astrometrics (3412), but

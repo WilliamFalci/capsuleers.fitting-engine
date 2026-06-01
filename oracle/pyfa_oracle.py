@@ -34,6 +34,16 @@ try:
 except Exception:
     DamagePattern = None
 
+# Force FULL spool-up for Triglavian entropic disintegrators so pyfa matches
+# our engine's default (disintegratorSpoolPercent = 1 = fully spooled). pyfa's
+# default is unspooled (0 stacks) → ~3.1x lower disintegrator DPS otherwise.
+try:
+    from eos.utils.spoolSupport import SpoolOptions
+    from eos.const import SpoolType
+    _SPOOL = SpoolOptions(SpoolType.SPOOL_SCALE, 1.0, True)
+except Exception:
+    _SPOOL = None
+
 _STATE = {"OFFLINE": -1, "ONLINE": 0, "ACTIVE": 1, "OVERHEATED": 2}
 _CHAR = None
 _UNIFORM = DamagePattern(25, 25, 25, 25) if DamagePattern else None
@@ -133,8 +143,9 @@ def stats(fit):
     except Exception:
         drone_ctrl = None
     drone_ctrl_km = (drone_ctrl / 1000.0) if drone_ctrl else None
-    wdps = fit.getWeaponDps(); ddps = fit.getDroneDps(); tdps = fit.getTotalDps()
-    wvol = fit.getWeaponVolley()
+    wdps = fit.getWeaponDps(spoolOptions=_SPOOL); ddps = fit.getDroneDps()
+    tdps = fit.getTotalDps(spoolOptions=_SPOOL)
+    wvol = fit.getWeaponVolley(spoolOptions=_SPOOL)
 
     return {
         "fitting": {
