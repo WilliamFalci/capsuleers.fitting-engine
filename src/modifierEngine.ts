@@ -815,14 +815,17 @@ function computeModifierValue(
         const level = ctx.skillLevel(skillID)
         if (level === 0) return null  // skill at 0 → modifier inactive
 
-        // SHIP ROLE BONUSES are FLAT, not skill-scaled. Pyfa hardcodes
-        // each role-bonus effect with the bonus value taken verbatim
-        // from `shipBonusRoleN` attrs. Generic per-level scaling on a
-        // ship source would multiply role bonuses 5× at All-V (e.g.
-        // Babaroga's `shipBonusRole2 = -50` cap-need bonus on remote
-        // reps would become -250 % → cap need flips negative → infinite
-        // free cap). Detected by source.kind === 'ship' AND modifying
-        // attr in the role-bonus family.
+        // SHIP ROLE / SPECIAL bonuses are FLAT, not skill-scaled. Pyfa takes
+        // the value verbatim; the LRSM/ORSM `skillTypeID` only SELECTS which
+        // items receive it (Drones, a turret skill, …) — it is NOT a scaler.
+        //
+        // We CAN'T blanket-flatten every ship source here: genuine per-level
+        // racial-hull weapon bonuses whose attr is missing from
+        // SHIP_BONUS_SCALING_SKILL fall through to the generic scale-by-level
+        // path below and are accidentally CORRECT at All-V (selector-skill
+        // level == racial-skill level == 5). Flattening those breaks them
+        // (Apocalypse Navy Issue weapon DPS −22 %). So flatten only the
+        // enumerated full-value role/special bonus attrs.
         if (source.kind === 'ship' && SHIP_ROLE_BONUS_ATTRS.has(mi.modifyingAttributeID!)) {
             return { value: baseValue, scaled: false }
         }
@@ -892,6 +895,20 @@ const SHIP_ROLE_BONUS_ATTRS: ReadonlySet<number> = new Set([
            //   shipBonusDroneDamageMultiplierRookie is OwnerRequiredSkillModifier
            //   gated on Drones (3436); the skill only selects the recipient
            //   drones, the +20 % is flat. Was scaling × Drones V → +100 %.
+    // FLAT full-value role / special weapon+drone damage bonuses. Same shape as
+    // the rookie bonuses: ORSM/LRSM whose skill is a recipient selector, value
+    // is the FULL bonus (not per-level), so it must NOT be scaled by level.
+    // (Per-level racial-hull bonuses use small values and fall through to the
+    // generic scale-by-level path, which is correct at All-V.)
+    1268,  // eliteBonusViolatorsLargeEnergyTurretDamageRole1 — Marauder
+           //   (Paladin/Golem/Kronos/Vargur) +100 % weapon damage ROLE bonus.
+           //   Was scaling × turret skill V → +500 % (Paladin weapon DPS ×3).
+    1576,  // shipBonusSmallEnergyTurretDamageATF1 — AT frigate (Malice) +100 %.
+    2580,  // industrialBonusDroneDamage — Orca +100 % drone damage (flat).
+    3203,  // industrialCommandBonusDroneDamage — Orca/Rorqual command +15 %.
+    3179,  // shipRoleBonusDroneDamage — mining barge (Procurer/…) +50 % role.
+    5746,  // ATfrigDroneBonus — AT frigate (Sidewinder) +150 % drone damage.
+    5748,  // AtcruiserDroneBonus — AT cruiser (Cobra) +150 % drone damage.
     1989,  // probeLauncherCPUPercentRoleBonusT3 value — effect 6009 on T3C hulls
            //   (Loki/Tengu/…): "-99 % CPU for Scan Probe Launchers". Declared as
            //   LocationRequiredSkillModifier gated on Astrometrics (3412), but
