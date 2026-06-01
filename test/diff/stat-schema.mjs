@@ -37,11 +37,13 @@ export function oursToSchema(d) {
         offense: {
             weaponDps: off.weaponDps, droneDps: off.droneDps,
             totalDps: off.totalDps,
-            // pyfa's getWeaponVolley() is WEAPON-only (drones fire continuously,
-            // they have no synchronized volley). Our off.alphaStrike folds in
-            // drone+fighter alpha, so compare the weapon-only sum for parity.
+            // pyfa's getWeaponVolley() counts every weapon EXCEPT drones/
+            // fighters (which fire continuously, no synchronized volley) —
+            // turrets, launchers AND smartbombs/doomsdays all contribute. Our
+            // off.alphaStrike folds in drone+fighter alpha, so subtract only
+            // those for parity.
             alphaStrike: (off.breakdown ?? [])
-                .filter(b => b.kind === 'TURRET' || b.kind === 'MISSILE')
+                .filter(b => b.kind !== 'DRONE' && b.kind !== 'FIGHTER')
                 .reduce((s, b) => s + (b.alpha ?? 0), 0),
         },
         capacitor: {
