@@ -1,0 +1,31 @@
+@capsuleers/eve-fit-engine
+Copyright (C) 2026 Capsuleers.app
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version. See the LICENSE file for the full text.
+
+-------------------------------------------------------------------------------
+Derivative-work notice
+-------------------------------------------------------------------------------
+This engine is a derivative work of Pyfa (https://github.com/pyfa-org/Pyfa),
+the Python Fitting Assistant, which is licensed under the GNU GPL v3.0. The
+ship-fitting calculation semantics — effect handlers keyed by EVE dogma effect
+IDs, stacking-penalty groups, capacitor simulation, and the late-runtime
+resistance-adaptation pass — mirror Pyfa's `eos` calculation engine. As a
+derivative work, this package is distributed under the same GPL-3.0-or-later
+terms.
+
+Pyfa is Copyright (C) its respective authors. See the Pyfa repository for the
+list of contributors.
+
+-------------------------------------------------------------------------------
+EVE Online Static Data Export (SDE)
+-------------------------------------------------------------------------------
+This package contains NO EVE Online game data. It operates on a `FittingDataset`
+that the consumer supplies at runtime. EVE Online and the EVE logo are the
+registered trademarks of CCP hf. All EVE-related materials are property of CCP
+hf. SDE data is distributed by CCP under its own licence terms (the EVE Online
+Third-Party Developer License / SDE terms) and is NOT covered by this package's
+GPL licence.

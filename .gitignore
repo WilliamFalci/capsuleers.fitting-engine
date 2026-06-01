@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+.idea/
+.vscode/
+*.tsbuildinfo
+# Never commit SDE data into this repo — it is CCP's, not GPL-able.
+/fixtures/sde/
+/*.jsonl

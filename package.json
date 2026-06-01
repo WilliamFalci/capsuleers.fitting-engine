@@ -1,0 +1,58 @@
+{
+  "name": "@capsuleers/eve-fit-engine",
+  "version": "0.1.0",
+  "description": "Pyfa-parity EVE Online ship & structure fitting calculation engine. Inject an SDE dataset + a fit, get the full derived stat block (offense, defense, capacitor, navigation, targeting, fitting, projected, structure).",
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "sideEffects": false,
+  "keywords": [
+    "eve-online",
+    "eve",
+    "pyfa",
+    "fitting",
+    "dogma",
+    "ship-fitting",
+    "eft"
+  ],
+  "author": "Capsuleers.app",
+  "homepage": "https://github.com/capsuleers/eve-fit-engine",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/capsuleers/eve-fit-engine.git"
+  },
+  "bugs": {
+    "url": "https://github.com/capsuleers/eve-fit-engine/issues"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "LICENSE",
+    "NOTICE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run typecheck && npm run build"
+  },
+  "devDependencies": {
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
