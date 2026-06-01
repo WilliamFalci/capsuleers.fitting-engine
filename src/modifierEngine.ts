@@ -647,6 +647,21 @@ const SUBSYSTEM_BONUS_SCALING_SKILL: ReadonlyMap<number, number> = new Map([
     [1448, 30545],                 // MinmatarDefensive
     [1449, 30551],                 // MinmatarOffensive
     [1450, 30554],                 // MinmatarPropulsion
+
+    // ----- Authoritative completion: every subsystem-bonus attr that the SDE
+    // ----- scales by a racial subsystem skill, derived verbatim from the
+    // ----- `subsystemSkillLevel*` skill effects (modAttr = bonus attr,
+    // ----- modifying = 280/skillLevel, PreMul). The Amarr/Caldari secondaries
+    // ----- above were hand-added; Gallente + Minmatar secondaries (and the
+    // ----- 2680-2687 defensive/core block) were MISSING, so subsystem-sourced
+    // ----- bonuses on those races (e.g. Loki Propulsion agility 1523, Offensive
+    // ----- RoF 1522 / 1534) fell to the flat path and applied ×1 instead of ×5.
+    // ----- Duplicates of the entries above are harmless (same value).
+    [1517, 30540], [1519, 30546], [1520, 30553], [1521, 30550], // Gallente Def/Core/Prop/Off secondaries
+    [1522, 30551], [1523, 30554], [1525, 30547], [1526, 30545], // Minmatar Off/Prop/Core/Def secondaries
+    [1531, 30537], [1532, 30550], [1533, 30549], [1534, 30551], // Off cross-race tertiaries (Amarr/Gallente/Caldari/Minmatar)
+    [2680, 30532], [2681, 30539], [2682, 30544], [2683, 30548], // Def/Core extra (Amarr/Caldari)
+    [2684, 30540], [2685, 30546], [2686, 30545], [2687, 30547], // Def/Core extra (Gallente/Minmatar)
 ])
 
 /** Result of {@link computeModifierValue}. `scaled=true` means the value
@@ -847,6 +862,14 @@ const SHIP_ROLE_BONUS_ATTRS: ReadonlySet<number> = new Set([
     2302,  // shipBonusRole5
     2303,  // shipBonusRole6
     5952,  // shipBonusGasCloudDurationRoleBonusOreMiningDestroyer
+    1989,  // probeLauncherCPUPercentRoleBonusT3 value — effect 6009 on T3C hulls
+           //   (Loki/Tengu/…): "-99 % CPU for Scan Probe Launchers". Declared as
+           //   LocationRequiredSkillModifier gated on Astrometrics (3412), but
+           //   the skill only SELECTS the recipient (probe launchers) — the bonus
+           //   is FLAT. Without this entry the ship-domain reader scales it ×
+           //   Astrometrics level → -99 % becomes -495 % PostPercent → a Loki
+           //   Expanded Probe Launcher's 242 tf CPU flips to -955.9 tf and total
+           //   CPU used reads -388 instead of +569.5.
 ])
 
 /**

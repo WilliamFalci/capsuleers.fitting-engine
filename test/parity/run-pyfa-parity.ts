@@ -100,6 +100,81 @@ interface TestFit {
 }
 
 const FITS: TestFit[] = [
+    // -----------------------------------------------------------------
+    // Loki · T3C · 'TheRoman - Thor' — HAM / shield, full 4 subsystems.
+    // Regression guard for two fixes:
+    //   (1) probeLauncherCPUPercentRoleBonusT3 (attr 1989) applied FLAT, not
+    //       × Astrometrics level (was flipping probe-launcher CPU to -955 tf).
+    //   (2) Gallente/Minmatar subsystem secondary bonus attrs (1522/1523/1534…)
+    //       scaled × racial subsystem skill (was ×1 → low DPS + high align).
+    // -----------------------------------------------------------------
+    {
+        name: 'Loki · TheRoman - Thor',
+        screenshot: 'loki.png',
+        build: () => ({
+            shipTypeID: 29990, // Loki
+            name: 'TheRoman - Thor',
+            visibility: 'PRIVATE',
+            tags: [],
+            modules: [
+                { id: 'l0', slotType: 'LO',  position: 0, typeID: 2048,  state: 'ACTIVE' },  // Damage Control II
+                { id: 'l1', slotType: 'LO',  position: 1, typeID: 2605,  state: 'ACTIVE' },  // Nanofiber Internal Structure II
+                { id: 'l2', slotType: 'LO',  position: 2, typeID: 1541,  state: 'ACTIVE' },  // Power Diagnostic System II
+                { id: 'l3', slotType: 'LO',  position: 3, typeID: 22291, state: 'ACTIVE' },  // Ballistic Control System II
+                { id: 'm0', slotType: 'MED', position: 0, typeID: 527,   state: 'ACTIVE' },  // Stasis Webifier II
+                { id: 'm1', slotType: 'MED', position: 1, typeID: 2281,  state: 'ACTIVE' },  // Multispectrum Shield Hardener II
+                { id: 'm2', slotType: 'MED', position: 2, typeID: 35659, state: 'ACTIVE' },  // 50MN Y-T8 Compact Microwarpdrive
+                { id: 'm3', slotType: 'MED', position: 3, typeID: 32780, state: 'ACTIVE' },  // X-Large Ancillary Shield Booster
+                { id: 'm4', slotType: 'MED', position: 4, typeID: 14246, state: 'ACTIVE' },  // Dread Guristas Warp Disruptor
+                { id: 'h0', slotType: 'HI',  position: 0, typeID: 25715, state: 'ACTIVE', chargeTypeID: 2679 }, // HAM II + Scourge Rage HAM
+                { id: 'h1', slotType: 'HI',  position: 1, typeID: 25715, state: 'ACTIVE', chargeTypeID: 2679 },
+                { id: 'h2', slotType: 'HI',  position: 2, typeID: 25715, state: 'ACTIVE', chargeTypeID: 2679 },
+                { id: 'h3', slotType: 'HI',  position: 3, typeID: 25715, state: 'ACTIVE', chargeTypeID: 2679 },
+                { id: 'h4', slotType: 'HI',  position: 4, typeID: 25715, state: 'ACTIVE', chargeTypeID: 2679 },
+                { id: 'h5', slotType: 'HI',  position: 5, typeID: 4260,  state: 'ACTIVE' },  // Expanded Probe Launcher II
+                { id: 'h6', slotType: 'HI',  position: 6, typeID: 11578, state: 'ONLINE' },  // Covert Ops Cloaking Device II
+                { id: 'r0', slotType: 'RIG', position: 0, typeID: 31366, state: 'ONLINE' },  // Medium Ancillary Current Router II
+                { id: 'r1', slotType: 'RIG', position: 1, typeID: 31167, state: 'ONLINE' },  // Medium Hyperspatial Velocity Optimizer II
+                { id: 'r2', slotType: 'RIG', position: 2, typeID: 31167, state: 'ONLINE' },  // Medium Hyperspatial Velocity Optimizer II
+            ],
+            drones: [
+                { id: 'd0', typeID: 21640, countTotal: 2, countActive: 2 }, // Valkyrie II (in space)
+                { id: 'd1', typeID: 2175,  countTotal: 2, countActive: 0 }, // Infiltrator II (in bay)
+            ],
+            fighters: [],
+            cargo: [],
+            implants: [],
+            boosters: [],
+            subsystems: [
+                { id: 's1', slot: 1, typeID: 45595 }, // Loki Defensive - Covert Reconfiguration
+                { id: 's2', slot: 2, typeID: 45608 }, // Loki Offensive - Launcher Efficiency Configuration
+                { id: 's3', slot: 3, typeID: 45620 }, // Loki Propulsion - Intercalated Nanofibers
+                { id: 's4', slot: 4, typeID: 45633 }, // Loki Core - Immobility Drivers
+            ],
+        }),
+        expected: {
+            ehpTotal: 21_400,
+            ehpShield: 10_100,
+            ehpArmor: 6_290,
+            ehpHull: 4_980,
+            shieldResist: { em: 70.5, therm: 64.6, kin: 64.6, exp: 70.5 },
+            armorResist:  { em: 83.0, therm: 58.6, kin: 36.3, exp: 23.5 },
+            hullResist:   { em: 59.8, therm: 59.8, kin: 59.8, exp: 59.8 },
+            cpuUsed: 569.5, cpuMax: 562.5,
+            powerUsed: 1_023, powerMax: 1_067,
+            calibrationUsed: 300, calibrationMax: 400,
+            weaponDps: 596,
+            capCapacity: 1_480, // XL ASB makes cap volatile ("lasts 5s") — skip the stable/seconds check
+            maxVelocity: 1_911,
+            alignTime: 6.0,
+            maxTargetingRangeKm: 81.2,
+            scanResolution: 300,
+            sensorStrength: 20.4,
+            droneRangeKm: 60,
+            signatureRadius: 1_060,
+        },
+    },
+
     {
         name: 'Babaroga · Kerrum Pithy',
         screenshot: 'babaroga.png',
