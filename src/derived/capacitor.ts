@@ -312,7 +312,15 @@ function drainEntryFromEffect(effect: SdeEffect, mod: ItemState): DrainEntry | n
     // (fit.py __generateDrain). Modules with a long reactivation lockout (Warp
     // Core Stabilizer 150 s, MJD, cloaks) drain far less per second than their
     // bare duration implies; without this we overstate their cap usage ~11×.
-    const cycleMs = baseCycleMs + mod.getFinal(ATTR_REACTIVATION_MS, 0)
+    // Round to an INTEGER millisecond cycle, exactly as pyfa does
+    // (`int(fullCycleTime)` in fit.py __generateDrain). This is load-bearing
+    // for the sim: the period optimisation takes the LCM of all cycle times,
+    // and a fractional cycle (e.g. 7500.0000001 from attribute math) makes the
+    // gcd/LCM degenerate into an astronomically large period, so the
+    // stable-period early-exit never fires — the sim then runs to t_max and
+    // captures a deeper `cap_lowest_pre` than pyfa's early-exit, skewing the
+    // reported stable %. Integer cycles keep the LCM (and thus the exit) sane.
+    const cycleMs = Math.round(baseCycleMs + mod.getFinal(ATTR_REACTIVATION_MS, 0))
     return {
         cycleMs,
         capNeed: discharge,
@@ -333,9 +341,9 @@ function boosterDrainEntry(mod: ItemState): DrainEntry | null {
     if (!charge) return null
     const capNeed = mod.getFinal(ATTR_CAPACITOR_NEED, 0)
     const inject  = charge.getFinal(ATTR_CAPACITOR_BONUS, 0)
-    const cycleMs = mod.getFinal(ATTR_DURATION_MS, 0)
+    const cycleMs = Math.round(mod.getFinal(ATTR_DURATION_MS, 0))  // integer cycle (see drainEntryFromEffect)
     if (cycleMs <= 0) return null
-    let reloadMs = mod.getFinal(ATTR_RELOAD_TIME, 0)
+    let reloadMs = Math.round(mod.getFinal(ATTR_RELOAD_TIME, 0))
     if (reloadMs <= 0) reloadMs = 10_000 // Pyfa default for cap boosters
     const capacity = mod.getFinal(ATTR_CAPACITY, 0)
     const chargeVol = charge.getFinal(ATTR_VOLUME, 0)
