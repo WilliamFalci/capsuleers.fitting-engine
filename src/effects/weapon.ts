@@ -134,6 +134,9 @@ export interface WeaponRangeInfo {
     explosionVelocity: number
     /** Missile-specific: damage reduction factor (DRF). */
     drf: number
+    /** Missile-specific: max flight range in meters — modified charge
+     *  velocity × flight time (ship/skill/rig bonuses included). 0 otherwise. */
+    flightRange: number
 }
 
 export function readRangeInfo(item: ItemState, effect: SdeEffect, kind: WeaponEffectKind): WeaponRangeInfo {
@@ -160,10 +163,16 @@ export function readRangeInfo(item: ItemState, effect: SdeEffect, kind: WeaponEf
     let explosionRadius = 0
     let explosionVelocity = 0
     let drf = 0
+    let flightRange = 0
     if (kind === 'MISSILE' && item.charge) {
         explosionRadius = item.charge.getFinal(ATTR.EXPLOSION_RADIUS, 0)
         explosionVelocity = item.charge.getFinal(ATTR.EXPLOSION_VELOCITY, 0)
         drf = item.charge.getFinal(ATTR.DRF, 0)
+        // Max range a missile reaches = modified velocity (m/s) × modified flight time (ms)
+        // / 1000. Both attributes carry the ship/skill/rig bonuses applied to the charge.
+        const velocity = item.charge.getFinal(ATTR.MAX_VELOCITY, 0)
+        const flightMs = item.charge.getFinal(ATTR.EXPLOSION_DELAY, 0)
+        flightRange = velocity * flightMs / 1000
     }
 
     return {
@@ -174,5 +183,6 @@ export function readRangeInfo(item: ItemState, effect: SdeEffect, kind: WeaponEf
         explosionRadius,
         explosionVelocity,
         drf,
+        flightRange,
     }
 }

@@ -63,6 +63,9 @@ export interface OffenseReport {
     weaponTracking?: number
     explosionVelocity?: number
     explosionRadius?: number
+    /** Missile max flight range (m) — modified velocity × flight time. The
+     *  missile equivalent of `weaponOptimal`. Undefined for non-missile fits. */
+    missileRange?: number
     breakdown: WeaponContribution[]
 }
 
@@ -180,6 +183,9 @@ export function computeOffense(
     const explosionRadius = missileContribs.length > 0
         ? missileContribs[0]!.range.explosionRadius
         : undefined
+    const missileRange = missileContribs.length > 0
+        ? Math.max(...missileContribs.map(c => c.range.flightRange).filter(v => v > 0))
+        : undefined
 
     return {
         weaponDps,
@@ -194,6 +200,7 @@ export function computeOffense(
         weaponTracking,
         explosionVelocity,
         explosionRadius,
+        missileRange: missileRange != null && Number.isFinite(missileRange) ? missileRange : undefined,
         breakdown,
     }
 }
@@ -282,6 +289,7 @@ function fighterContributionFor(
             explosionRadius: fighter.getFinal(2125, 0),
             explosionVelocity: fighter.getFinal(2126, 0),
             drf: fighter.getFinal(2127, 0),
+            flightRange: 0,
         },
         count,
     }

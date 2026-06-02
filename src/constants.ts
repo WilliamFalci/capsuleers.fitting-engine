@@ -279,6 +279,7 @@ export const ATTR = {
     EXPLOSION_VELOCITY: 653,
     EXPLOSION_RADIUS: 654,
     DRF: 858,                    // damage reduction factor
+    EXPLOSION_DELAY: 281,        // charge attr — "Maximum Flight Time" (ms); range = maxVelocity × flightTime/1000
 
     // ---- Breacher Pods (DOT charges, e.g. SCARAB Breacher Pod M) ----
     DOT_DURATION: 5735,                  // ms
