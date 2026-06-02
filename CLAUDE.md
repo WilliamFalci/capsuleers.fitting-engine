@@ -9,6 +9,11 @@ extracted from capsuleers.app and published to npm as `eve-fit-engine`. Inject a
 `FittingDataset` + a `Fit`, get the full derived stat block (offense, defense,
 capacitor, navigation, targeting, fitting, projected, structure).
 
+> **0.1.4** — `offense.missileRange` (m): missile max flight range = modified
+> charge `maxVelocity × flightTime`, the missile analogue of `weaponOptimal`.
+> Also on each missile `WeaponContribution.range.flightRange`. Additive; both
+> parity suites stay green (662/0).
+
 - **Licence: GPL-3.0-or-later.** It is a declared derivative of
   [pyfa-org/Pyfa](https://github.com/pyfa-org/Pyfa) (`eos`). Porting Pyfa handler
   code directly is permitted. capsuleers.app consumes it **server-side only** so

@@ -617,6 +617,7 @@ function deriveStats(
             weaponTracking: offense.weaponTracking,
             explosionVelocity: offense.explosionVelocity,
             explosionRadius: offense.explosionRadius,
+            missileRange: offense.missileRange,
             breakdown: offense.breakdown,
         },
         capacitor: {

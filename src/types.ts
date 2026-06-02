@@ -448,6 +448,7 @@ export interface DerivedStats {
         weaponTracking?: number
         explosionVelocity?: number  // missiles
         explosionRadius?: number    // missiles
+        missileRange?: number       // missiles — max flight range (m), velocity × flight time
         breakdown: WeaponContribution[]
     }
     capacitor: {
@@ -638,6 +639,7 @@ export interface WeaponContribution {
         explosionRadius: number
         explosionVelocity: number
         drf: number
+        flightRange: number
     }
     chargeTypeID?: number
     count: number
