@@ -102,8 +102,12 @@ function buildPool(dataset) {
     //    Bomb (862, delayed AoE), Breacher Pod (4807, % DoT), Festival (501).
     //    The generator's "non-bonused = other weapon system" would otherwise
     //    arm a turret hull with these and manufacture huge bogus DPS diffs.
+    //  - Civilian guns carry built-in damage and no charge; they're starter
+    //    junk no real fit uses, and our engine reports 0 DPS for a charge-less
+    //    turret while pyfa fires their built-in damage. Excluding them keeps the
+    //    non-bonused weapon pick to a representative chargeable gun.
     const SPECIAL_WEAPON_GROUPS = new Set([512, 862, 4807, 501])
-    const normal = (t) => !/Polarized/i.test(t.name ?? '') && !SPECIAL_WEAPON_GROUPS.has(t.groupID)
+    const normal = (t) => !/Polarized|Civilian/i.test(t.name ?? '') && !SPECIAL_WEAPON_GROUPS.has(t.groupID)
     const turrets = bySlot.HI.filter(t => isTurretWeapon(t) && normal(t))
     const launchers = bySlot.HI.filter(t => isMissileLauncher(t) && normal(t))
     const charges = [...(dataset.typesByBucket.charges?.values() ?? [])].filter(t => t.published !== false)
