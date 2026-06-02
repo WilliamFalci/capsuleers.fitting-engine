@@ -45,6 +45,12 @@ const EXCLUDED_MODULE_GROUPS = new Set([
     590, 4127, 4184, 815,   // Jump Portal (×3), Clone Vat Bay
     1706, 4174,             // Capital Sensor Array, Compressors
     899, 1533, 1770,        // Warp Disrupt Field, Micro Jump Field, Command Burst
+    // Ship-restricted "mode" modules (Siege/Triage/Bastion/Industrial Core +
+    // Entosis) — fit only on specific hulls, and the generator was arming
+    // arbitrary ships with them. Their legacy-handled +100% sensor-strength
+    // bonus also isn't stacking-penalised against each other, producing a
+    // systematic +7% sensorStrength diff on any fit that got two of them.
+    515, 1313,
 ])
 
 /** A T3D in-game ALWAYS has a mode active; pyfa auto-assigns modeItems[0] when
