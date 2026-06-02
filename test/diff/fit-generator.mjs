@@ -57,7 +57,9 @@ const EXCLUDED_MODULE_GROUPS = new Set([
  *  none is set — the lowest-typeID mode whose name starts with the ship name
  *  (the Defense Mode). Replicate so resists / sig / speed / targeting match. */
 function defaultModeTypeID(dataset, ship) {
-    if (ship.groupID !== TACTICAL_DESTROYER_GROUP) return undefined
+    // Tactical Destroyers + the Anhinga are the hulls pyfa gives a mandatory
+    // mode (ship.py: `group != "Tactical Destroyer" and name != "Anhinga"`).
+    if (ship.groupID !== TACTICAL_DESTROYER_GROUP && ship.name !== 'Anhinga') return undefined
     const prefix = (ship.name ?? '').toLowerCase()
     let best = null
     for (const t of (dataset.typesByBucket.modules?.values() ?? [])) {
