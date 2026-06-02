@@ -36,6 +36,15 @@ const EXCLUDED_MODULE_GROUPS = new Set([
     54, 464, 483, 538, 546, // Mining Laser, Strip Miner, Frequency Mining, Data Miners, Mining Upgrade
     650, 1122, 737, 4138,   // Tractor Beam, Salvager, Gas Cloud Scoops, Gas Cloud Harvesters
     658,  // Cynosural Field Generator
+    // Remote / target-dependent assistance modules (no self-contained stat).
+    41, 67, 209, 290, 325, 585, 1697, 1698, 2018,
+    // Capital-special / super-weapon / fleet / utility modules whose stats are
+    // niche or target/fleet-dependent (Doomsday & friends pull in super-weapon
+    // DPS our engine doesn't model; portals/clone-vats/compressors are utility).
+    588, 842, 1815,         // Super Weapon, Burst Projectors, Titan Phenomena Generator
+    590, 4127, 4184, 815,   // Jump Portal (×3), Clone Vat Bay
+    1706, 4174,             // Capital Sensor Array, Compressors
+    899, 1533, 1770,        // Warp Disrupt Field, Micro Jump Field, Command Burst
 ])
 
 /** A T3D in-game ALWAYS has a mode active; pyfa auto-assigns modeItems[0] when
