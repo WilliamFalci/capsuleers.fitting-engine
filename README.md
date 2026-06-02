@@ -19,9 +19,16 @@ projected effects, and structure fuel/service stats.
 - **Two entries.** Base (`.`): inject your own `FittingDataset`. Node (`./node`):
   batteries-included — bundles a snapshot of the EVE SDE (under CCP's licence, by
   mere aggregation) + an fs loader, so it works out of the box on the server.
-- **Validated against Pyfa.** Stat parity is verified against Pyfa screenshots in
-  the upstream capsuleers.app fixture suite (`npm run test:pyfa`, 631 assertions
-  at All-V skills, zero tolerance overrides).
+- **Validated against Pyfa two ways.**
+  - **Fixture suite** — `npm run test:pyfa`: 662 hand-curated assertions against
+    Pyfa screenshots, All-V skills, zero tolerance overrides. This is the
+    release gate and the engine's correctness ground truth.
+  - **Differential harness** — `npm run diff`: generates 4 fits for *every*
+    published ship and compares every stat against a headless **pyfa-org/Pyfa**
+    oracle. 1646/1676 fits (98.2%) match exactly; the residual is a documented
+    set of pyfa float/modelling/per-ship quirks (see
+    [`test/diff/known-diffs.mjs`](test/diff/known-diffs.mjs)). Exits 0 on no
+    *unexpected* diffs; `--strict` re-lists the accepted set as failures.
 
 ## Install
 
@@ -83,11 +90,14 @@ bundle and injects it, so it never depends on the (snapshot) bundled data.
 ## Provenance / how parity is maintained
 
 The engine mirrors Pyfa's `eos` calculation model: effect handlers keyed by EVE
-dogma effect IDs, separate stacking-penalty pools per operation, a late-runtime
-resistance-adaptation pass, capacitor simulation, and spool-up handling. When CCP
-ships a new SDE, data-driven `modifierInfo` effects work automatically; new
-hardcoded mechanics in Pyfa's `effects.py` are tracked and ported, then re-checked
-against the parity suite before release.
+dogma effect IDs, stacking-penalty pools, a late-runtime resistance-adaptation
+pass, a discrete capacitor simulation (faithful port of `eos/capSim.py` —
+integer cycle times, turret-volley vs staggered drains, cap-booster injection),
+and spool-up handling. When CCP ships a new SDE, data-driven `modifierInfo`
+effects work automatically; new hardcoded mechanics in Pyfa's `effects.py` are
+tracked and ported, then re-checked against **both** the fixture suite
+(`npm run test:pyfa`) and the per-ship differential harness (`npm run diff`)
+before release. See [`MAINTENANCE.md`](./MAINTENANCE.md) for the update flows.
 
 ## Licence
 

@@ -1,7 +1,8 @@
 # Release & wiring checklist
 
-Everything in the package is built, tested (parity 631/0, coverage 0 silent) and
-publish-verified (`npm publish --dry-run` → 906 kB tarball with dist/ + data/).
+Everything in the package is built, tested (parity 662/0, differential harness
+0 unexpected diffs, coverage 0 silent) and publish-verified
+(`npm publish --dry-run` → tarball with dist/ + data/).
 The steps below need **your npm + GitHub credentials** and so must be run by you.
 
 ## 0. Check the name is free (one-time)
