@@ -523,6 +523,20 @@ function stampBuild(): void {
 
 async function main() {
     const startedAt = Date.now()
+
+    // No staged SDE source? `scripts/fetch-sde.mjs` only populates .sde-src/ when
+    // CCP's upstream build differs from the committed data/.build. On an
+    // unchanged day it short-circuits with "UNCHANGED" and stages nothing, so
+    // there is genuinely nothing to rebuild — provided a built bundle already
+    // exists. Treat that as a clean no-op (matches `build:data`'s intent and
+    // keeps the daily sde-refresh CI green). Only a truly empty state (no source
+    // AND no prior bundle) is a real error, left to computeContentHash() below.
+    const sourceStaged = fs.existsSync(path.join(SDE_ROOT, SOURCE_FILES[0]))
+    if (!sourceStaged && fs.existsSync(path.join(OUTPUT_ROOT, 'manifest.json'))) {
+        console.log(`[fitting-bundle] no staged SDE source in ${SDE_ROOT}; existing bundle present — nothing to rebuild`)
+        return
+    }
+
     const hash = await computeContentHash()
     const versionDir = path.join(OUTPUT_ROOT, `v${hash}`)
     const manifestPath = path.join(OUTPUT_ROOT, 'manifest.json')
