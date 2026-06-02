@@ -120,6 +120,13 @@ export function applySourceItem(
         // "*AddPassive" HP bonuses) must NOT be re-applied here, or the
         // bonus would be double-counted.
         if (LEGACY_HANDLED_EFFECT_IDS.has(eid)) continue
+        // Pilot-security-status-scaled bonuses (Alliance-Tournament frigates:
+        // Sidewinder/Cambion/Whiptail/…). Pyfa computes `bonus = attr ×
+        // pilotSecStatus`, and the default character has sec status 0, so the
+        // bonus is 0. We don't model pilot security status, so applying the raw
+        // attribute (e.g. ATFrigDmgBonus = -7.5 %) wrongly dents weapon DPS.
+        // Treat these as no-ops, matching pyfa's default-pilot behaviour.
+        if (SEC_STATUS_SCALED_EFFECT_IDS.has(eid)) continue
         // Pyfa-parity: a projected warp scrambler / disruptor stops effects
         // 6441 (MWD) and 6442 (MJD) on the target. When the local fit IS
         // the target (the user has projected hostile scram onto themselves
@@ -3427,6 +3434,15 @@ export function applyLegacySubsystemAddPassive(ctx: FitContext): void {
  *  restores parity. */
 const LEGACY_HANDLED_HARDCODED_EFFECTS: ReadonlySet<number> = new Set([
     6658,  // Bastion Module — applyLegacyBastion
+])
+
+/** Effects whose magnitude pyfa scales by the pilot's security status
+ *  (`bonus = attr × getPilotSecurity()`), used by Alliance-Tournament frigates.
+ *  The default character has sec status 0 → the bonus is 0. We don't model
+ *  pilot sec status, so we skip these (apply 0), matching pyfa's default pilot.
+ *  Derived from pyfa eos/effects.py handlers calling `getPilotSecurity`. */
+export const SEC_STATUS_SCALED_EFFECT_IDS: ReadonlySet<number> = new Set([
+    6871, 12165, 12181, 12185, 12202,
 ])
 
 export const LEGACY_HANDLED_EFFECT_IDS: ReadonlySet<number> = new Set([
