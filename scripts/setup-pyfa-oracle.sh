@@ -18,12 +18,21 @@ PY="${PYTHON:-python3}"
 
 echo "[oracle] root: $PYFA"
 
-# 1. clone pyfa-org/Pyfa (shallow)
+# 1. clone pyfa-org/Pyfa. Set PYFA_REF=<commit|tag|branch> to PIN the oracle for
+#    reproducible runs (CI should pin so a moving pyfa master can't flip results);
+#    unset = shallow clone of master (fine for local/manual use).
+PYFA_REF="${PYFA_REF:-}"
 if [ ! -d "$PYFA/eos" ]; then
-  echo "[oracle] cloning pyfa-org/Pyfa..."
-  git clone --depth 1 https://github.com/pyfa-org/Pyfa.git "$PYFA"
+  if [ -n "$PYFA_REF" ]; then
+    echo "[oracle] cloning pyfa-org/Pyfa @ $PYFA_REF..."
+    git clone https://github.com/pyfa-org/Pyfa.git "$PYFA"
+    ( cd "$PYFA" && git checkout --quiet "$PYFA_REF" )
+  else
+    echo "[oracle] cloning pyfa-org/Pyfa (master, unpinned)..."
+    git clone --depth 1 https://github.com/pyfa-org/Pyfa.git "$PYFA"
+  fi
 else
-  echo "[oracle] pyfa already cloned"
+  echo "[oracle] pyfa already cloned ($(cd "$PYFA" && git rev-parse --short HEAD 2>/dev/null || echo '?'))"
 fi
 
 # 2. venv + minimal eos/db_update deps (no wx, no numpy, no matplotlib)

@@ -19,5 +19,9 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run build
-      - run: npm run test:pyfa        # 631 assertions vs committed data/
+      - run: npm run test:pyfa        # 662 assertions vs committed data/
       - run: npm run audit:coverage   # truly silent: 0
+      # NOTE: the per-ship differential harness (npm run diff) is deliberately
+      # NOT a per-push gate — it needs a pyfa clone + Python/eve.db build and
+      # compares against pyfa's own (possibly drifting) SDE, so it lives in a
+      # scheduled, pinned, non-blocking job (see diff-parity.yml).

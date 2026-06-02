@@ -1,0 +1,90 @@
+name: diff-parity
+
+# Per-ship differential parity vs a PINNED pyfa-org/Pyfa oracle. Complements
+# ci.yml (deterministic fixture suite, per-push) and pyfa-drift.yml (detects
+# changed effect IDs): this one detects VALUE regressions across the whole ship
+# roster — 4 generated fits per published ship, every stat compared to pyfa.
+#
+# Why scheduled + non-blocking (NOT a per-push gate):
+#   - it needs a pyfa clone + a Python venv + an eve.db build (heavy/slow);
+#   - it compares against pyfa's OWN bundled SDE, which can drift from our
+#     committed data/ — so a red run may mean "pyfa/SDE moved", not "we broke".
+# It therefore opens an issue with the unexpected diffs instead of failing a
+# branch. pyfa is PINNED (PYFA_REF) so a moving master can't flip results; the
+# accepted-differences registry (test/diff/known-diffs.mjs) is calibrated
+# against this exact pin — bump both together when intentionally updating pyfa.
+
+on:
+  schedule:
+    - cron: '0 7 * * 1'   # Mondays 07:00 UTC (after pyfa-drift at 06:00)
+  workflow_dispatch:
+    inputs:
+      pyfa_ref:
+        description: 'Override pinned pyfa ref (commit/tag/branch)'
+        required: false
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: diff-parity
+  cancel-in-progress: false
+
+env:
+  # Pin pyfa to the commit the known-diffs registry was calibrated against.
+  PYFA_REF: 0469e9733562d5960d6f7b6b6fc68ca6b9cba08e
+
+jobs:
+  diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.13' }
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Build pyfa oracle (pinned)
+        env:
+          PYFA_REF: ${{ github.event.inputs.pyfa_ref || env.PYFA_REF }}
+        run: npm run diff:setup
+
+      - name: Differential parity (all ships)
+        id: diff
+        env:
+          PYFA_REF: ${{ github.event.inputs.pyfa_ref || env.PYFA_REF }}
+        run: |
+          set +e
+          npm run diff 2>/dev/null | tee diff-report.txt
+          echo "code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+          set -e
+
+      - name: Open issue on UNEXPECTED diffs
+        if: steps.diff.outputs.code != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs')
+            let report = ''
+            try { report = fs.readFileSync('diff-report.txt', 'utf8') } catch {}
+            // Keep the issue body small: the UNEXPECTED section + summary line.
+            const start = report.indexOf('=== UNEXPECTED')
+            const body = start >= 0 ? report.slice(start) : report
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `diff-parity: unexpected differences vs pyfa (${process.env.PYFA_REF.slice(0,7)})`,
+              body:
+                'The per-ship differential harness found differences NOT in ' +
+                '`test/diff/known-diffs.mjs`. Either an engine regression, or a ' +
+                'pyfa/SDE drift since the pinned ref.\n\n' +
+                'Reproduce locally: `npm run diff:setup && npm run diff` ' +
+                '(use `--strict` to re-audit the accepted set).\n\n' +
+                '```\n' + body.slice(0, 5000) + '\n```',
+              labels: ['diff-parity'],
+            })
+            core.setFailed('Unexpected differential-parity diffs (issue opened).')
