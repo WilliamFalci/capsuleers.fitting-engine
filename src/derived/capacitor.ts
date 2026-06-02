@@ -347,13 +347,20 @@ function boosterDrainEntry(mod: ItemState): DrainEntry | null {
     if (reloadMs <= 0) reloadMs = 10_000 // Pyfa default for cap boosters
     const capacity = mod.getFinal(ATTR_CAPACITY, 0)
     const chargeVol = charge.getFinal(ATTR_VOLUME, 0)
-    const charges = (capacity > 0 && chargeVol > 0) ? Math.floor(capacity / chargeVol) : 1
+    // Charges the booster holds = floor(capacity / chargeVolume). Pyfa feeds
+    // this as `numShots`; a value of 0 (charge too big to fit even one — the
+    // sim's `if clipSize:` is then falsy) means NO reload, i.e. the injector is
+    // treated as effectively infinite. We must NOT clamp this up to 1: forcing
+    // clipSize=1 made every cycle trigger a reload gap, roughly halving the
+    // sustained injection and flipping cap-booster fits from stable to
+    // depleting (Orthrus 150s→90s, several capitals stable→unstable).
+    const charges = (capacity > 0 && chargeVol > 0) ? Math.floor(capacity / chargeVol) : 0
     return {
         cycleMs,
         // Pyfa convention: positive capNeed = drain, negative = injection.
         // For boosters the *net* per-cycle change is (capNeed_module - inject_charge).
         capNeed: capNeed - inject,
-        clipSize: Math.max(1, charges),
+        clipSize: charges,
         reloadMs,
         isInjector: true,
         disableStagger: false,
