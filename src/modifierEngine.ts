@@ -632,6 +632,23 @@ const SHIP_BONUS_SCALING_SKILL: ReadonlyMap<number, number> = new Map([
     // 6112-6116 = same skill-driven attrs on the FAX side, all per racial Carrier skill).
     [5981, 24311], [5982, 24312], [5983, 24313], [5984, 24314],
     [6112, 24313], [6113, 24312], [6114, 24311], [6116, 24314],
+
+    // ----- Auto-derived from the SDE: attrs that are BOTH skill-level-scaled
+    // (a skill effect does `attr ×= skillLevel` via attr 280) AND read by a
+    // SHIP-side effect as the bonus value. These are per-racial/role-skill hull
+    // bonuses whose ship-side reader must scale by the skill level. Previously
+    // missing → the bonus was taken at base (×1) instead of ×5 at All-V.
+    // Notable: Exhumer/Barge shield+armor resist role bonuses (Hulk/Skiff/
+    // Mackinaw shield resist 4 %→20 %), Bhaalgorn drone+laser (492), industrial
+    // command (Orca/Rorqual), Marauder/pirate/expedition hull bonuses.
+    [66, 89611], [310, 3432], [349, 19760], [492, 3339], [1296, 21610],
+    [1669, 3184], [1670, 3184], [1842, 32918], [3167, 33856],
+    [3181, 17940], [3182, 17940], [3183, 17940], [3184, 17940], [3185, 17940],
+    [3187, 17940], [3188, 17940], [3190, 33856], [3191, 33856], [3192, 33856],
+    [3193, 22551], [3194, 22551], [3197, 22551], [3198, 22551], [3199, 22551],
+    [3203, 29637], [3204, 29637], [3205, 29637], [3210, 3341], [3221, 29637],
+    [3222, 29637], [3223, 28374], [3224, 28374], [3237, 32918], [3240, 32918],
+    [3326, 28374], [6088, 33092], [6089, 33094],
 ])
 
 const SUBSYSTEM_BONUS_SCALING_SKILL: ReadonlyMap<number, number> = new Map([
@@ -905,7 +922,8 @@ const SHIP_ROLE_BONUS_ATTRS: ReadonlySet<number> = new Set([
            //   Was scaling × turret skill V → +500 % (Paladin weapon DPS ×3).
     1576,  // shipBonusSmallEnergyTurretDamageATF1 — AT frigate (Malice) +100 %.
     2580,  // industrialBonusDroneDamage — Orca +100 % drone damage (flat).
-    3203,  // industrialCommandBonusDroneDamage — Orca/Rorqual command +15 %.
+           //   (industrialCommandBonusDroneDamage attr 3203 is per-ICS-level
+           //   scaled → it lives in SHIP_BONUS_SCALING_SKILL, not here.)
     3179,  // shipRoleBonusDroneDamage — mining barge (Procurer/…) +50 % role.
     5746,  // ATfrigDroneBonus — AT frigate (Sidewinder) +150 % drone damage.
     5748,  // AtcruiserDroneBonus — AT cruiser (Cobra) +150 % drone damage.
