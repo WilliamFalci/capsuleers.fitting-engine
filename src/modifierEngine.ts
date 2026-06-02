@@ -832,18 +832,21 @@ function computeModifierValue(
         const level = ctx.skillLevel(skillID)
         if (level === 0) return null  // skill at 0 → modifier inactive
 
-        // SHIP ROLE / SPECIAL bonuses are FLAT, not skill-scaled. Pyfa takes
-        // the value verbatim; the LRSM/ORSM `skillTypeID` only SELECTS which
-        // items receive it (Drones, a turret skill, …) — it is NOT a scaler.
-        //
-        // We CAN'T blanket-flatten every ship source here: genuine per-level
-        // racial-hull weapon bonuses whose attr is missing from
-        // SHIP_BONUS_SCALING_SKILL fall through to the generic scale-by-level
-        // path below and are accidentally CORRECT at All-V (selector-skill
-        // level == racial-skill level == 5). Flattening those breaks them
-        // (Apocalypse Navy Issue weapon DPS −22 %). So flatten only the
-        // enumerated full-value role/special bonus attrs.
-        if (source.kind === 'ship' && SHIP_ROLE_BONUS_ATTRS.has(mi.modifyingAttributeID!)) {
+        // SHIP-source bonuses reaching here are FLAT, not skill-scaled. Pyfa
+        // takes the value verbatim; the LRSM/ORSM `skillTypeID` only SELECTS
+        // which items receive the bonus (Drones, a turret skill, Propulsion
+        // Jamming, …) — it is NOT a per-level scaler. The genuinely per-level
+        // racial-hull bonuses scale by their racial class skill and are handled
+        // ABOVE via SHIP_BONUS_SCALING_SKILL (checked first), which is now
+        // SDE-complete (auto-derived from skill `attr ×= skillLevel` effects).
+        // So anything left on a ship source here is a role/special bonus whose
+        // value is the FULL amount; scaling it by the selector-skill level
+        // multiplied role bonuses 5× at All-V (Cobra/Orca drone +750/+500 %,
+        // interceptor warp-disruptor cap need −80 %→−400 % flipping it
+        // negative, Marauder weapon +500 %, Babaroga cap-need → free cap).
+        // (SHIP_ROLE_BONUS_ATTRS retained below as documentation of the
+        // originally-enumerated cases; this blanket rule subsumes it.)
+        if (source.kind === 'ship') {
             return { value: baseValue, scaled: false }
         }
 
