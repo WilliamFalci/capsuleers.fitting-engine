@@ -99,6 +99,13 @@ tracked and ported, then re-checked against **both** the fixture suite
 (`npm run test:pyfa`) and the per-ship differential harness (`npm run diff`)
 before release. See [`MAINTENANCE.md`](./MAINTENANCE.md) for the update flows.
 
+## Contributing
+
+See [`CONTRIBUTING.md`](./CONTRIBUTING.md) — the step-by-step guide to setup,
+every internal command, the two validation suites (`npm run test:pyfa` +
+`npm run diff`), how to add fixtures / port effects, the pyfa-pin recalibration
+flow, and the project's hard rules.
+
 ## Licence
 
 GPL-3.0-or-later. Copyright (C) 2026 Capsuleers.app. This is free software; see

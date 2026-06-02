@@ -127,3 +127,11 @@ See `MAINTENANCE.md` (the two update streams) and `RELEASE.md` (publish + how th
 app wires to the package). SDE balance patches are data-only (no package
 release); new Pyfa hardcoded mechanics are detected by `npm run drift` and ported
 manually, then gated by both suites.
+
+## Docs upkeep (RULE)
+
+[`CONTRIBUTING.md`](./CONTRIBUTING.md) is the contributor entry point (setup,
+every command, the validation suites, best practices). **Keep it — and the
+command/flow references in this file — in sync whenever you add/rename an `npm`
+script, change a validation or release flow, or alter a parity invariant.** Do
+it in the same PR as the change; stale command docs are a contributor trap.
