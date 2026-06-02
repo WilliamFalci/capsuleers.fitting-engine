@@ -71,6 +71,7 @@
  */
 
 import { ATTR } from '../constants'
+import { isTurretWeapon } from '../fitChecks'
 import type { FitContext } from '../fitContext'
 import type { ItemState } from '../itemState'
 import type { FittingDataset, SdeEffect } from '../types'
@@ -318,7 +319,12 @@ function drainEntryFromEffect(effect: SdeEffect, mod: ItemState): DrainEntry | n
         clipSize: 0,           // ammo doesn't reload for cap purposes on regular modules
         reloadMs: 0,
         isInjector: false,
-        disableStagger: false,
+        // Pyfa: `disableStagger = mod.hardpoint == TURRET`. Turrets fire as a
+        // synchronized volley (their cap drains aggregate, capNeed × N at the
+        // shared cycle); everything else is staggered evenly across its cycle.
+        // Without this, N turrets were staggered (one drain at cycle/N) instead
+        // of N together, shifting the cap timeline (time-to-empty off ~5-10 %).
+        disableStagger: isTurretWeapon(mod.type),
     }
 }
 
