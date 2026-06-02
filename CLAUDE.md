@@ -95,6 +95,32 @@ npm run build:data    # fetch CCP SDE → rebuild data/ bundle (consumer-style)
 > its `known-diffs.mjs` entry in the same commit. New/real divergences MUST fail
 > the harness.
 
+### RULE — bumping the pyfa pin (always do this together)
+
+The diff oracle is pinned: `PYFA_REF` in `.github/workflows/diff-parity.yml` and
+`known-diffs.mjs` are calibrated against ONE pyfa commit. **Whenever you bump
+pyfa deliberately, recalibrate both in the same change** — never move the pin
+without re-running the registry, and never edit the registry by hand for a pin
+change:
+
+```bash
+rm -rf .pyfa
+PYFA_REF=<new-pyfa-commit> npm run diff:setup    # rebuild oracle at the new pin
+npm run diff:recalibrate                          # regen known-diffs.mjs + bump PYFA_REF
+# → classify every entry it marks "PENDING REVIEW":
+#     real bug  → FIX the engine, re-run (don't accept it);
+#     pyfa quirk → replace the reason with the real root cause.
+npm run test:pyfa     # must stay 662/0
+npm run diff          # must exit 0
+```
+
+`npm run diff:recalibrate` ([scripts/recalibrate-pyfa-pin.mjs](scripts/recalibrate-pyfa-pin.mjs))
+does the mechanical half: reads the current `.pyfa` HEAD as the new pin, runs the
+diff in `--strict` mode, carries forward reasons for kept entries, drops resolved
+ones, marks genuinely-new diffs `PENDING REVIEW`, rewrites `known-diffs.mjs`, and
+bumps `PYFA_REF`. It exits 1 while any entry is `PENDING REVIEW`. The human still
+classifies the new diffs — auto-accepting them all would mask real regressions.
+
 ## Maintenance flows
 
 See `MAINTENANCE.md` (the two update streams) and `RELEASE.md` (publish + how the
