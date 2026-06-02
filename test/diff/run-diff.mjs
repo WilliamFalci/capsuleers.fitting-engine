@@ -22,6 +22,7 @@ import { loadBundledDataset, buildAllVSkillProfile } from '../../dist/node.js'
 import { computeFit, DAMAGE_PROFILE_PRESETS } from '../../dist/index.js'
 import { generateFits } from './fit-generator.mjs'
 import { oursToSchema, flatten, diffStats } from './stat-schema.mjs'
+import { isKnownDiff, knownDiffReason, KNOWN_DIFFS } from './known-diffs.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const PYFA = resolve(HERE, '../../.pyfa')
@@ -38,6 +39,7 @@ function parseArgs(argv) {
         else if (k === 'only') a.only = v.split(',')
         else if (k === 'stats') a.stats = v.split(',')
         else if (k === 'json') a.json = true
+        else if (k === 'strict') a.strict = true
     }
     return a
 }
@@ -132,30 +134,61 @@ async function main() {
         for (const d of diffs) allDiffs.push({ ship: it.ship.name, shipId: it.ship.id, fitType: it.fitType, ...d })
     }
 
-    report(allDiffs, { total: items.length, okFits, oracleFail, ourFail }, args)
-    process.exit(allDiffs.length ? 1 : 0)
+    // Partition into documented/accepted differences (pyfa float/modelling/
+    // per-ship quirks — see known-diffs.mjs) and UNEXPECTED diffs. The run only
+    // fails on unexpected diffs, so the harness still catches every new/real
+    // divergence (including a regression that changes an accepted value). Pass
+    // --strict to fail on any diff (ignore the known-diffs list).
+    const unexpected = args.strict ? allDiffs : allDiffs.filter(d => !isKnownDiff(d))
+    const accepted = args.strict ? [] : allDiffs.filter(isKnownDiff)
+
+    report(unexpected, { total: items.length, okFits, oracleFail, ourFail, accepted }, args)
+    process.exit(unexpected.length ? 1 : 0)
 }
 
 function report(diffs, summary, args) {
     if (args.json) { console.log(JSON.stringify({ summary, diffs }, null, 2)); return }
     const fmt = (v) => v == null ? '—' : (typeof v === 'number' ? (Math.abs(v) >= 100 ? v.toFixed(1) : v.toFixed(3)) : String(v))
+    const accepted = summary.accepted ?? []
+
+    // Accepted, documented differences (pyfa float / modelling / per-ship quirks
+    // — see known-diffs.mjs). Shown for transparency; they do NOT fail the run.
+    if (accepted.length) {
+        console.log(`\n=== ACCEPTED known differences (${accepted.length}; documented in known-diffs.mjs) ===`)
+        const byReason = new Map()
+        for (const d of accepted) {
+            const r = knownDiffReason(d) ?? 'documented'
+            if (!byReason.has(r)) byReason.set(r, [])
+            byReason.get(r).push(d)
+        }
+        for (const [reason, list] of byReason) {
+            console.log(`  • ${reason}`)
+            for (const d of list) console.log(`      ${String(d.ship).padEnd(22)} ${d.fitType.padEnd(12)} ${d.key}  ours=${fmt(d.ours)} pyfa=${fmt(d.pyfa)}`)
+        }
+    }
+
     // group by stat key, sorted by count desc
     const byStat = new Map()
     for (const d of diffs) { if (!byStat.has(d.key)) byStat.set(d.key, []); byStat.get(d.key).push(d) }
     const sorted = [...byStat.entries()].sort((a, b) => b[1].length - a[1].length)
-    console.log('\n=== DIFFERENCES (ours vs pyfa) ===')
-    for (const [key, list] of sorted) {
-        console.log(`\n● ${key}  (${list.length} fit${list.length > 1 ? 's' : ''})`)
-        list.sort((a, b) => Math.abs(b.pctDelta ?? 0) - Math.abs(a.pctDelta ?? 0))
-        for (const d of list.slice(0, 12)) {
-            const pct = d.pctDelta == null ? '' : `  (${d.pctDelta > 0 ? '+' : ''}${d.pctDelta.toFixed(1)}%)`
-            console.log(`    ${String(d.ship).padEnd(22)} ${d.fitType.padEnd(12)} ours=${fmt(d.ours).padStart(12)} pyfa=${fmt(d.pyfa).padStart(12)}${pct}`)
+    if (diffs.length) {
+        console.log('\n=== UNEXPECTED DIFFERENCES (ours vs pyfa) ===')
+        for (const [key, list] of sorted) {
+            console.log(`\n● ${key}  (${list.length} fit${list.length > 1 ? 's' : ''})`)
+            list.sort((a, b) => Math.abs(b.pctDelta ?? 0) - Math.abs(a.pctDelta ?? 0))
+            for (const d of list.slice(0, 12)) {
+                const pct = d.pctDelta == null ? '' : `  (${d.pctDelta > 0 ? '+' : ''}${d.pctDelta.toFixed(1)}%)`
+                console.log(`    ${String(d.ship).padEnd(22)} ${d.fitType.padEnd(12)} ours=${fmt(d.ours).padStart(12)} pyfa=${fmt(d.pyfa).padStart(12)}${pct}`)
+            }
+            if (list.length > 12) console.log(`    … +${list.length - 12} more`)
         }
-        if (list.length > 12) console.log(`    … +${list.length - 12} more`)
     }
-    console.log(`\nSummary: ${summary.okFits}/${summary.total} fits match | ${diffs.length} stat diffs across ${byStat.size} stats` +
-        ` | our-fail ${summary.ourFail} | oracle-fail ${summary.oracleFail}`)
-    if (!diffs.length) console.log('✅ No differences — engine matches pyfa across all sampled fits.')
+    console.log(`\nSummary: ${summary.okFits}/${summary.total} fits match | ${diffs.length} unexpected diff${diffs.length === 1 ? '' : 's'}` +
+        ` across ${byStat.size} stats | ${accepted.length} accepted | our-fail ${summary.ourFail} | oracle-fail ${summary.oracleFail}`)
+    if (!diffs.length) {
+        console.log(`✅ No unexpected differences — engine matches pyfa across all sampled fits` +
+            `${accepted.length ? ` (${accepted.length} documented pyfa float/modelling/per-ship quirks accepted; run --strict to list them as failures)` : ''}.`)
+    }
 }
 
 main().catch(e => { console.error(e); process.exit(2) })

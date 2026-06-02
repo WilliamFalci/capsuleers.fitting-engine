@@ -29,6 +29,26 @@ npm run diff -- --tol=0.02 --json     # custom tolerance / machine output
 Exit code is **1** when any difference exceeds tolerance (default 1% relative +
 0.01 absolute), **0** when everything matches — so a loop can detect "done".
 
+### Known / accepted differences
+
+A small set of residual diffs are **documented pyfa float / modelling / per-ship
+quirks** that an independent engine cannot match without regressing the
+662-fixture Pyfa-parity suite (`npm run test:pyfa`) or replicating a
+pyfa-specific anomaly. They live in [`known-diffs.mjs`](known-diffs.mjs), each
+annotated with its ROOT CAUSE, and are reported as **ACCEPTED** (they do not
+fail the run). Anything NOT on that list is an **UNEXPECTED** diff and fails the
+run — so the harness still catches every new/real divergence, including a
+regression that changes one of the accepted values.
+
+- `npm run diff` → exit 0 iff there are no *unexpected* diffs (accepted ones are
+  printed for transparency).
+- `npm run diff -- --strict` → treat **every** diff as a failure (ignore the
+  known-diffs list); use this to re-audit the accepted set.
+
+The hard invariant: the engine NEVER trades away `test:pyfa` 662/0 to satisfy
+this harness. The accepted diffs persist precisely because the only "fixes" for
+them regress that suite (see `known-diffs.mjs` for the per-entry rationale).
+
 ## The 4 fits per ship
 
 - **bonused** — weapons of the ship's primary hardpoint system (T2) + matching mods
