@@ -25,6 +25,7 @@
  */
 
 import { OPERATION_BY_SDE_CODE } from './constants'
+import { STACKING_PENALTY_GROUPS } from './stackingGroups'
 import type { ItemState } from './itemState'
 import type { FitContext } from './fitContext'
 import { itemRequiresSkill } from './fitContext'
@@ -286,7 +287,7 @@ export function applyOneModifier(
     const targets = ctx.targetsForModifier(mi, source)
     if (targets.length === 0) return
 
-    const stackingGroup = computeStackingGroup(source, mi, dataset)
+    const stackingGroup = computeStackingGroup(source, mi, dataset, effect)
 
     // Multiplicative ops carry a literal multiplier in the SDE
     // (e.g. attr 565 = 0.5 + PostMul → "× 0.5"). The only exception is
@@ -950,8 +951,10 @@ function computeStackingGroup(
     source: ItemState,
     mi: SdeModifierInfo,
     dataset: FittingDataset,
+    effect: SdeEffect,
 ): string | null {
-    // 1. Source-kind exemptions: skills + ship + mode + subsystem + char.
+    // 1. Source-kind exemptions: skills + ship + mode + subsystem + char never
+    //    impose a stacking penalty (role/skill bonuses apply in full).
     if (NO_PENALTY_KINDS.has(source.kind)) return null
 
     // 2. Attribute schema exemption: attributes flagged `stackable=true` in
@@ -961,13 +964,33 @@ function computeStackingGroup(
         if (attr?.stackable) return null
     }
 
-    // 3. Default: penalize all modifiers targeting the same attribute,
-    //    regardless of source. Pyfa uses a more granular grouping (some
-    //    bonuses share a sub-group across module families, others don't);
-    //    this simplification covers the 95% case and we can refine later
-    //    via an explicit override table for known sub-groups.
+    // 3. Per-EFFECT penalty group (Pyfa-faithful, applied conservatively).
+    //    Pyfa scopes the stacking penalty by a `penaltyGroup`: most module
+    //    bonuses share the `default` group (penalised together per attribute —
+    //    our long-standing behaviour), but a handful of effects use a CUSTOM
+    //    group so they form their OWN independent chain. The canonical case is
+    //    a cloak's scanResolution multiplier (`cloakingScanResolutionMultiplier`):
+    //    it must NOT penalise against a Warp Core Stabilizer's scanResolution
+    //    multiplier (default group), so the two apply in full (matching pyfa).
+    //    We honour only the custom (non-`default`) groups here and leave every
+    //    `default`/untable effect on the existing `attr:<id>` chain, so this
+    //    can't regress the broad behaviour validated by the parity suite.
+    const group = STACKING_PENALTY_GROUPS.get(effect.id)
+    if (group !== undefined && group !== 'default' && CUSTOM_STACK_GROUPS_HONOURED.has(group)) {
+        return `${group}:${mi.modifiedAttributeID}`
+    }
     return `attr:${mi.modifiedAttributeID}`
 }
+
+/** Custom pyfa penaltyGroups we honour as INDEPENDENT chains. Kept to the set
+ *  empirically verified not to regress the parity suite — the operation-named
+ *  groups (postMul/postDiv/preMul/…) are NOT honoured because pyfa's real chain
+ *  separation for those interacts with legacy-handled effects in ways our
+ *  generic path doesn't reproduce 1:1. The cloak's scanResolution group is the
+ *  clear, safe case: it must not penalise against a Warp Core Stabilizer. */
+const CUSTOM_STACK_GROUPS_HONOURED: ReadonlySet<string> = new Set([
+    'cloakingScanResolutionMultiplier',
+])
 
 function mapSourceKind(kind: ItemState['kind']): ModifierAffliction['sourceKind'] {
     // ItemKind has a few values that ModifierAffliction's sourceKind doesn't
