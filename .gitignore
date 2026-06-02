@@ -8,6 +8,9 @@ dist/
 .idea/
 .vscode/
 *.tsbuildinfo
+# Python bytecode from the oracle batch driver (oracle/pyfa_oracle.py)
+__pycache__/
+*.pyc
 # Raw SDE source staged by scripts/fetch-sde.mjs — large + CCP-owned, ephemeral.
 # (The FILTERED bundle under data/ IS committed/shipped; the raw source is not.)
 /.sde-src/

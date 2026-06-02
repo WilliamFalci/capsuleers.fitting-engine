@@ -9,7 +9,7 @@
  * pyfa-specific anomaly. Each entry is annotated with its ROOT CAUSE — it is NOT
  * a place to hide real bugs.
  *
- * Calibrated against pyfa commit: 0469e9733562d5960d6f7b6b6fc68ca6b9cba08e
+ * Calibrated against pyfa commit: 3d6a6f0f7f33113f8cd4fafe14d79c77140ea5c8
  * (kept in lock-step with PYFA_REF in .github/workflows/diff-parity.yml.)
  *
  * Matching is by (ship, fitType, statKey). A matched diff is ACCEPTED and does

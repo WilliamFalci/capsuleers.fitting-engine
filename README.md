@@ -25,7 +25,7 @@ projected effects, and structure fuel/service stats.
     release gate and the engine's correctness ground truth.
   - **Differential harness** — `npm run diff`: generates 4 fits for *every*
     published ship and compares every stat against a headless **pyfa-org/Pyfa**
-    oracle. 1646/1676 fits (98.2%) match exactly; the residual is a documented
+    oracle. 1662/1676 fits (99.2%) match exactly; the residual is a documented
     set of pyfa float/modelling/per-ship quirks (see
     [`test/diff/known-diffs.mjs`](test/diff/known-diffs.mjs)). Exits 0 on no
     *unexpected* diffs; `--strict` re-lists the accepted set as failures.

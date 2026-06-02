@@ -286,11 +286,24 @@ function collectDrains(ctx: FitContext, dataset: FittingDataset): DrainCollectio
             continue
         }
 
+        // A module activates ONCE per cycle and pays its cap cost once,
+        // regardless of how many of its effects reference the same
+        // capacitorNeed/duration. Pyfa models cap per-module, so it never
+        // double-counts; we collect via effects, so we must dedupe identical
+        // drain entries WITHIN a module. The only published type that trips
+        // this is "Dual Afocal Light Laser I" (typeID 6633), the lone module
+        // in the SDE carrying two discharge-bearing effects (10 + 263) that
+        // both point at attr 6 / attr 51 — without the dedupe its cap drain
+        // was counted twice (2× usage → ~half the true time-to-empty).
+        const seen = new Set<string>()
         for (const eid of m.effectIDs) {
             const effect = dataset.effects.get(eid)
             if (!effect) continue
             const entry = drainEntryFromEffect(effect, m)
             if (!entry) continue
+            const sig = `${entry.cycleMs}|${entry.capNeed}|${entry.clipSize}|${entry.reloadMs}|${entry.isInjector ? 1 : 0}|${entry.disableStagger ? 1 : 0}`
+            if (seen.has(sig)) continue
+            seen.add(sig)
             drains.push(entry)
             if (entry.capNeed > 0 && entry.cycleMs > 0) {
                 totalGrossDrain += entry.capNeed / (entry.cycleMs / 1000)

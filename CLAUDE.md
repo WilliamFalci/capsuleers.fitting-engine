@@ -69,7 +69,11 @@ npm run build:data    # fetch CCP SDE → rebuild data/ bundle (consumer-style)
   `capacitor.ts`, `structure.ts`, `application.ts`. The capacitor sim is a
   faithful port of `eos/capSim.py` (integer cycle times → sane LCM/early-exit;
   turret drains volley `capNeed×N` while others stagger; cap-booster `clipSize=0`
-  = infinite injector; `moduleReactivationDelay` in the drain cycle).
+  = infinite injector; `moduleReactivationDelay` in the drain cycle;
+  per-module drain dedupe — a module pays its activation cap cost ONCE even when
+  it carries multiple discharge-bearing effects, mirroring pyfa's per-module
+  `capUse`; the lone SDE type that needs this is "Dual Afocal Light Laser I"
+  (6633), the only one with two discharge effects 10+263).
 - `constants.ts` (`ATTR`, `OPERATION_BY_SDE_CODE`, `LEGACY_EFFECT_IDS`,
   `OUT_OF_SCOPE_EFFECT_IDS`), `fitContext.ts`, `itemState.ts`,
   `modifiedAttribute.ts`, `profiles.ts` (damage/target presets, All-V),
