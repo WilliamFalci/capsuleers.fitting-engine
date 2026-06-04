@@ -65,8 +65,14 @@ jobs:
         run: |
           git config user.name  "capsuleers-bot"
           git config user.email "bot@capsuleers.app"
+          # Commit the refreshed dataset FIRST so the working tree is clean.
+          # `npm version` runs `git status --porcelain -uno` and treats *staged*
+          # changes as dirty too — a bare `git add data` before the bump fails
+          # with "Git working directory not clean." Commit, then let npm version
+          # create its own bump commit + tag on top of a clean tree.
           git add data
-          npm version patch -m "chore(data): refresh SDE bundle to build $(cat data/.build) [auto] %s"
+          git commit -m "chore(data): refresh SDE bundle to build $(cat data/.build) [auto]"
+          npm version patch -m "chore(release): v%s [auto]"
           npm publish --access public   # prepublishOnly runs typecheck + build
           git push --follow-tags
 
