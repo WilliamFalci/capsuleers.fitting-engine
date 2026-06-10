@@ -1,6 +1,6 @@
 {
   "name": "eve-fit-engine",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Pyfa-parity EVE Online ship & structure fitting calculation engine. Inject an SDE dataset + a fit, get the full derived stat block (offense, defense, capacitor, navigation, targeting, fitting, projected, structure).",
   "license": "GPL-3.0-or-later",
   "type": "module",
