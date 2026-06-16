@@ -1,0 +1,52 @@
+name: release
+
+# Manual code-release. Data releases publish automatically via sde-refresh.yml
+# (gated on a data/ change); engine/code fixes don't touch data/ and so never
+# trigger that path. This workflow bumps the version, publishes to npm using the
+# `prod` NPM_TOKEN, and pushes the release commit + tag — same publish step as
+# sde-refresh, triggered by hand for a code release.
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump'
+        required: true
+        default: patch
+        type: choice
+        options: [patch, minor, major]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    # NPM_TOKEN lives on the `prod` Environment secret — declare it to read it.
+    environment: prod
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+      - run: npm ci
+
+      # Gate the release on the parity suite (release gate) + the coverage audit,
+      # so a code release can never ship a regression.
+      - name: Parity + coverage gate
+        run: npm run test:pyfa && npm run audit:coverage
+
+      - name: Bump, publish & push
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          git config user.name  "capsuleers-bot"
+          git config user.email "bot@capsuleers.app"
+          npm version "${{ inputs.bump }}" -m "chore(release): v%s"
+          npm publish --access public   # prepublishOnly runs typecheck + build
+          git push --follow-tags
