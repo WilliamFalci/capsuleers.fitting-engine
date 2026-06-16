@@ -248,11 +248,25 @@ export class FitContext {
                 const skillID = modifier.skillTypeID
                 const out: ItemState[] = []
                 for (const m of this.modules) {
-                    if (itemRequiresSkill(m, skillID)) out.push(m)
-                    // Loaded charges are owned by the character too — missile
-                    // damage skill bonuses (Warhead Upgrades / Missile
-                    // Launcher Op family) target the AMMO's em/thermal/
-                    // kinetic/explosive damage attrs, not the launcher's.
+                    // Owner-domain (charID) skill modifiers reach the character's
+                    // OWN items — drones, fighters, and loaded charges (missile
+                    // damage skill bonuses like Warhead Upgrades / Missile
+                    // Launcher Op target the AMMO's damage attrs) — but NEVER the
+                    // ship-domain modules themselves. Pyfa's effect handlers
+                    // (e.g. Effect6556 moduleBonusDroneDamageAmplifier) boost only
+                    // fit.drones / fit.fighters, never modules.
+                    //
+                    // Self-targeting a module here is a real bug for the combo
+                    // damage modules that BOTH boost turrets (effect 91/93
+                    // energy/hybrid `LocationGroupModifier`, source attr 64) AND
+                    // carry the drone amp (effect 6556, `OwnerRequiredSkillModifier`
+                    // skillTypeID=Drones, attr 64). Those modules (Navy 'Neophyte'
+                    // Heat Sink, 'Argyreos' Mag Field Stab, Abyssal BCS/Heat Sink/
+                    // Mag Stab, …) REQUIRE the Drones skill, so they matched their
+                    // own owner modifier and inflated their own `damageMultiplier`,
+                    // which then leaked into the turret group bonus — e.g. a Freki
+                    // armed with lasers + a 'Neophyte' Heat Sink read +50% turret
+                    // damage that pyfa doesn't apply.
                     if (m.charge && itemRequiresSkill(m.charge, skillID)) out.push(m.charge)
                 }
                 for (const d of this.drones) if (itemRequiresSkill(d, skillID)) out.push(d)
