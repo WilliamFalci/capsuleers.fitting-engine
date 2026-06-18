@@ -9,10 +9,11 @@ extracted from capsuleers.app and published to npm as `eve-fit-engine`. Inject a
 `FittingDataset` + a `Fit`, get the full derived stat block (offense, defense,
 capacitor, navigation, targeting, fitting, projected, structure).
 
-> **0.1.4** — `offense.missileRange` (m): missile max flight range = modified
-> charge `maxVelocity × flightTime`, the missile analogue of `weaponOptimal`.
-> Also on each missile `WeaponContribution.range.flightRange`. Additive; both
-> parity suites stay green (662/0).
+> **0.1.10** (current published version) — the version stream is mostly
+> daily SDE-bundle auto-patches (`sde-refresh.yml`); the latest *code* fix
+> (`dfe6427`, owner-skill modifier leak) is described under "Modifier engine"
+> below. Both parity suites stay green (`test:pyfa` 662/0, `npm run diff`
+> exits 0).
 
 - **Licence: GPL-3.0-or-later.** It is a declared derivative of
   [pyfa-org/Pyfa](https://github.com/pyfa-org/Pyfa) (`eos`). Porting Pyfa handler
@@ -66,6 +67,15 @@ npm run build:data    # fetch CCP SDE → rebuild data/ bundle (consumer-style)
     security status; default pilot sec = 0 → skip, apply 0).
   - `computeStackingGroup` — stacking-penalty grouping (currently per-attribute
     `attr:<id>` + the cloak's own scanResolution group; see `stackingGroups.ts`).
+  - **Owner-skill modifier targeting** (`fitContext.ts`, fixed in `dfe6427`):
+    an `OwnerRequiredSkillModifier` (domain `charID`) reaches the character's
+    own drones / fighters / loaded charges but must NOT self-target
+    ship-domain modules. The combo damage modules that boost both turrets and
+    drones require the Drones skill, so a naïve "any module requiring the
+    skill" resolver made them self-match their own owner modifier and inflate
+    `damageMultiplier` (symptom: phantom +50% turret DPS on Freki/Khizriel/
+    etc.). Keep modules out of the owner-skill target set — mirrors pyfa's
+    `Effect6556`, which only touches `fit.drones` / `fit.fighters`.
 - `stackingGroups.ts` — `STACKING_PENALTY_GROUPS`: SDE-derived effectID → pyfa
   penaltyGroup. Honored conservatively (cloak group only); fully honoring the
   operation-named groups regresses the fixture suite — do NOT enable without
@@ -136,6 +146,18 @@ See `MAINTENANCE.md` (the two update streams) and `RELEASE.md` (publish + how th
 app wires to the package). SDE balance patches are data-only (no package
 release); new Pyfa hardcoded mechanics are detected by `npm run drift` and ported
 manually, then gated by both suites.
+
+Two CI publish paths (both gate on `npm run test:pyfa` + `npm run audit:coverage`
+and publish with the `prod`-environment `NPM_TOKEN`):
+- **`.github/workflows/sde-refresh.yml`** — daily cron; rebuilds `data/` from
+  CCP's latest SDE and, *only if the bundle changed and parity stays green*,
+  commits the new `data/` + bumps a patch + auto-publishes (these are the
+  `[auto]` release commits). On parity failure it opens an issue and does NOT
+  publish.
+- **`.github/workflows/release.yml`** — manual `workflow_dispatch` with a
+  `bump` choice (`patch`/`minor`/`major`). This is the path for **code-only
+  fixes** (engine changes don't touch `data/`, so they never trigger
+  `sde-refresh`); run it by hand to `npm version` → publish → push tag.
 
 ## Docs upkeep (RULE)
 

@@ -99,6 +99,12 @@ tracked and ported, then re-checked against **both** the fixture suite
 (`npm run test:pyfa`) and the per-ship differential harness (`npm run diff`)
 before release. See [`MAINTENANCE.md`](./MAINTENANCE.md) for the update flows.
 
+Releases follow two CI paths, both gated on parity + coverage: daily
+**SDE-bundle refreshes** auto-publish a patch when CCP's data changes and parity
+stays green (`sde-refresh` workflow), while **code-only fixes** ship via a manual
+`workflow_dispatch` release (engine changes don't touch `data/`, so they never
+trigger the data path). See [`RELEASE.md`](./RELEASE.md).
+
 ## Contributing
 
 See [`CONTRIBUTING.md`](./CONTRIBUTING.md) — the step-by-step guide to setup,
