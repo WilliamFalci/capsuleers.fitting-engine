@@ -50,13 +50,18 @@ jobs:
           fi
 
       - name: Parity + coverage gate
-        if: steps.chg.outputs.changed == 'true'
         id: gate
+        if: steps.chg.outputs.changed == 'true'
         run: |
+          # Tee'ing into a FILE (not a `| tee` pipeline — that would make `$?`
+          # report tee's status) so the failure step can quote the real reason in
+          # the issue body. Without it, diagnosing a blocked refresh meant
+          # digging through raw Actions logs to find which of the two gates broke.
           set +e
-          npm run test:pyfa && npm run audit:coverage
+          npm run test:pyfa > gate.log 2>&1 && npm run audit:coverage >> gate.log 2>&1
           echo "ok=$?" >> "$GITHUB_OUTPUT"
           set -e
+          cat gate.log
 
       - name: Bump, commit & publish (green)
         if: steps.chg.outputs.changed == 'true' && steps.gate.outputs.ok == '0'
@@ -76,17 +81,56 @@ jobs:
           npm publish --access public   # prepublishOnly runs typecheck + build
           git push --follow-tags
 
-      - name: Open issue (parity failed)
+      # ONE open issue per outage, not one per day. The gate stayed red from
+      # 2026-07-08 to 2026-08-05 (a single new effect, 12916) and this step filed
+      # 29 identical issues nobody read. Reuse the open issue: comment only when
+      # the upstream build number moves, so the thread reads as a timeline.
+      - name: Report blocked refresh (parity failed)
         if: steps.chg.outputs.changed == 'true' && steps.gate.outputs.ok != '0'
         uses: actions/github-script@v7
         with:
           script: |
-            await github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: `SDE refresh failed parity (build ${require('fs').readFileSync('data/.build','utf8').trim()})`,
-              body: 'A new CCP SDE changed the dataset, but `test:pyfa` / `audit:coverage` failed — NOT published.\n\n' +
-                    'Likely a real EVE balance/mechanic change. Reproduce locally with `npm run build:data && npm run test:pyfa`, ' +
-                    'update fixtures/handlers as needed, then let the next run publish.',
-              labels: ['sde-refresh'],
+            const fs = require('fs')
+            const build = fs.readFileSync('data/.build', 'utf8').trim()
+            const log = fs.existsSync('gate.log') ? fs.readFileSync('gate.log', 'utf8') : ''
+            const tail = log.split('\n').slice(-80).join('\n')
+            const title = `SDE refresh blocked: parity/coverage gate red (build ${build})`
+            const guidance =
+              'A new CCP SDE changed the dataset, but `test:pyfa` / `audit:coverage` failed — **NOT published**, ' +
+              'so every consumer stays pinned to the last green build until this is resolved.\n\n' +
+              'Reproduce locally with `npm run build:data && npm run test:pyfa && npm run audit:coverage`. ' +
+              'A `truly silent (real gaps)` count above zero means a new effect needs either an `applyLegacy*` ' +
+              'handler (`LEGACY_EFFECT_IDS`) or a documented entry in `OUT_OF_SCOPE_EFFECT_IDS`.\n\n' +
+              '<details><summary>Gate output (tail)</summary>\n\n```\n' + tail.slice(0, 55000) + '\n```\n\n</details>'
+
+            const { data: open } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner, repo: context.repo.repo,
+              state: 'open', labels: 'sde-refresh', per_page: 100,
             })
+            const existing = open.find((i) => !i.pull_request)
+            if (!existing) {
+              await github.rest.issues.create({
+                owner: context.repo.owner, repo: context.repo.repo,
+                title, body: guidance, labels: ['sde-refresh'],
+              })
+              return
+            }
+            // Same build as the last report → nothing new to say, stay quiet.
+            if (existing.title.includes(build)) return
+            await github.rest.issues.update({
+              owner: context.repo.owner, repo: context.repo.repo,
+              issue_number: existing.number, title,
+            })
+            await github.rest.issues.createComment({
+              owner: context.repo.owner, repo: context.repo.repo,
+              issue_number: existing.number,
+              body: `Still blocked — upstream moved to build \`${build}\`.\n\n` +
+                    '<details><summary>Gate output (tail)</summary>\n\n```\n' + tail.slice(0, 55000) + '\n```\n\n</details>',
+            })
+
+      # Make the run RED when the refresh is blocked. Previously the job exited 0
+      # after filing an issue, so the Actions list showed 29 consecutive green
+      # runs while the dataset was frozen — no failure notification ever fired.
+      - name: Fail the run if the refresh is blocked
+        if: steps.chg.outputs.changed == 'true' && steps.gate.outputs.ok != '0'
+        run: exit 1

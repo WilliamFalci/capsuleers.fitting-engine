@@ -624,6 +624,17 @@ export const OUT_OF_SCOPE_EFFECT_IDS: ReadonlyArray<LegacyEffectEntry> = [
     // Surfaced when categories 65/66 entered the bundle (2026-05-03).
     { id: 6443, name: null, handler: 'OUT-OF-SCOPE :: pointDefense (Standup anti-missile, projection-only)' },
     { id: 7120, name: null, handler: 'OUT-OF-SCOPE :: structureCynoJammerOnline (system-wide cyno suppression state, no fit-panel stat)' },
+    // ---- Breacher-Pod resistance state (Breach Control, typeID 95414). ----
+    // Surfaced by SDE build 3424810 (2026-07-08). Pyfa's Effect12916 does
+    // `boostItemAttr('breacherPodDamageResistance', breacherPodActivatedDamageReceivedPercentage)`
+    // — a resistance against Breacher Pod DoT damage, which is not one of the
+    // headline panel stats (EHP / DPS / capacitor / nav / targeting). The
+    // module's passive shield+armor+hull resist bonuses arrive data-driven via
+    // 16 `online` + 2302 `damageControl`, so the fit math is already exact
+    // without this effect. Re-evaluate if a breacher-pod defence surface ever
+    // lands in derived output (the offensive side already exists: 12174 is
+    // handled by derived/offense::breacherContributionFor).
+    { id: 12916, name: null, handler: 'OUT-OF-SCOPE :: moduleBonusBreacherPodDamageControl (breacher-pod DoT resist, no fit-panel stat)' },
 ] as const
 
 /** Verify every effect ID in LEGACY_EFFECT_IDS is still present in the

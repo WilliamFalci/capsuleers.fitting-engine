@@ -27,10 +27,16 @@ jobs:
       - name: Check Pyfa drift
         id: drift
         run: |
+          # Do NOT pipe into `tee`: after a pipeline `$?` is tee's status (always
+          # 0), so exit-2 drift was swallowed and neither the issue nor the run
+          # failure ever fired (49 added upstream effects went unreported from
+          # the 2026-06 snapshot to 2026-08). Redirect, capture, then print.
           set +e
-          node scripts/check-pyfa-drift.mjs | tee drift-report.txt
-          echo "code=$?" >> "$GITHUB_OUTPUT"
+          node scripts/check-pyfa-drift.mjs > drift-report.txt 2>&1
+          code=$?
           set -e
+          cat drift-report.txt
+          echo "code=$code" >> "$GITHUB_OUTPUT"
       - name: Open issue on drift
         if: steps.drift.outputs.code == '2'
         uses: actions/github-script@v7
