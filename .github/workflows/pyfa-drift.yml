@@ -49,9 +49,11 @@ jobs:
               repo: context.repo.repo,
               title: `Pyfa effects.py drift detected (${new Date().toISOString().slice(0,10)})`,
               body: '```\n' + body.slice(0, 60000) + '\n```\n\n' +
-                    'Port/verify the affected `applyLegacy*` handlers, then run `npm run test:pyfa` ' +
-                    'in capsuleers.app against the new SDE before releasing. ' +
-                    'Refresh the snapshot with `node scripts/check-pyfa-drift.mjs --update`.',
+                    'For each added/changed effect, decide data-driven (no action) vs needs an ' +
+                    '`applyLegacy*` handler. `npm run build:data && npm run audit:coverage` here answers ' +
+                    'it against the current SDE: anything that leaves `truly silent (real gaps)` at 0 is ' +
+                    'already covered by the generic dispatcher. Then `npm run test:pyfa` before releasing, ' +
+                    'and advance the baseline with `npm run drift:update`.',
               labels: ['pyfa-drift'],
             })
       - name: Fail the run if drift

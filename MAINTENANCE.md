@@ -3,19 +3,35 @@
 There are **two independent update streams**. Keeping them separate is the
 whole point of the package boundary.
 
-## 1. EVE SDE changes (CCP balance patches) — fully automatable, no package release
+## 1. EVE SDE changes (CCP balance patches) — fully automated, data-only release
 
-New ships/modules/skills and tweaked attributes ship as data. This package
-contains **no data**: the consumer (capsuleers.app) rebuilds its SDE bundle and
-injects it. Effects that use data-driven `modifierInfo` work automatically — no
-code change here.
+New ships/modules/skills and tweaked attributes ship as data. The SDE bundle
+lives **in this package** under `data/` (`manifest.json` + `v<hash>/*.json`,
+~8 MB) and is published with it; consumers read it from
+`node_modules/eve-fit-engine/data`. Effects that use data-driven `modifierInfo`
+work automatically — no code change here.
 
-Flow (lives in capsuleers.app, not this repo):
-1. New SDE released → regenerate the `.jsonl` source.
-2. `npm run fitting:bundle` (idempotent, content-hashed) → new bundle version.
-3. App redeploys with the new bundle. **This package is untouched.**
+Flow ([`sde-refresh.yml`](.github/workflows/sde-refresh.yml), daily 05:00 UTC):
+1. `npm run build:data` → `scripts/fetch-sde.mjs` resolves the latest
+   `buildNumber` from CCP's `tranquility/latest.jsonl`, downloads the versioned
+   JSONL zip, then `scripts/build-bundle.ts` rebuilds the content-hashed bundle.
+2. Gate: `npm run test:pyfa` + `npm run audit:coverage`. **Green** → commit
+   `data/`, `npm version patch`, publish to npm. **Red** → report on the single
+   open `sde-refresh` issue and fail the run; nothing is published.
+3. Consumers (capsuleers.app, Capsuleers.Intel, Capsuleers.IA) each run
+   Dependabot scoped to this one dependency with automerge, so a green refresh
+   reaches them without human action.
 
-→ Can be a scheduled CI job. A balance patch never requires a package release.
+→ A balance patch needs no code change, but it **does** cut a patch release:
+the data ships in the package.
+
+**When the gate goes red, the whole chain stops.** `audit:coverage` exits
+non-zero on `truly silent (real gaps) > 0` — a new effect with empty
+`modifierInfo`, referenced by a fittable type, registered nowhere. Triage:
+port Pyfa's handler into `LEGACY_EFFECT_IDS`, or document why it doesn't move a
+headline stat in `OUT_OF_SCOPE_EFFECT_IDS` (see §2). Until then every consumer
+stays pinned to the last green build — effect 12916 (Breach Control) froze the
+dataset for 29 days that way in 2026-07.
 
 ## 2. Pyfa hardcoded-effect changes — semi-automated (detect auto, port manual)
 
