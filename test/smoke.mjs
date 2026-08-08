@@ -1,21 +1,30 @@
 /**
- * Runtime smoke test for the BUILT package (dist/index.js).
+ * Runtime smoke test for the BUILT package (dist/index.js) — the BASE entry,
+ * the one a browser/bundler consumer gets. It has no fs and no loader, so the
+ * dataset has to be handed to it.
  *
- * Proves the bundled artifact loads and computes end-to-end. Byte-identity of
- * the source vs the app lib is checked separately; this closes the residual
- * "did tsup bundling change behaviour?" risk by exercising the real dist.
+ * That is the second thing this test pins, and why it does NOT just call
+ * `loadBundledDataset`: it hand-builds a `FittingDataset` from raw JSON exactly
+ * the way a browser consumer must (capsuleers.app's client does this over
+ * fetch). If the shape the engine expects ever drifts from the shape a consumer
+ * can assemble, this breaks — `dist/node.js` would not notice, because it
+ * builds that object itself.
  *
- * The package ships NO data — we build a FittingDataset from the consuming
- * app's SDE bundle via fs (this is exactly what a server consumer does).
+ * The bundle is the one shipped inside this package (`<pkg>/data`); before the
+ * SDE moved in here it lived in the consuming app, and the default path still
+ * pointed at a checkout that no longer exists — so this test failed on every
+ * machine and was in no gate to say so. Override with FIT_BUNDLE_DIR to run it
+ * against a different bundle of the same layout:
  *
- *   FIT_BUNDLE_DIR=/path/to/public/fitting-data node test/smoke.mjs
+ *   FIT_BUNDLE_DIR=/path/to/fitting-data node test/smoke.mjs
  */
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { computeFit } from '../dist/index.js'
 
 const BUNDLE_DIR = process.env.FIT_BUNDLE_DIR
-    || '/var/home/TremalJack/Documenti/WORK/Capsuleers.Site/public/fitting-data'
+    || path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'data')
 
 const BUCKET_FILES = {
     ships: 'types/ships.json', modules: 'types/modules.json', charges: 'types/charges.json',

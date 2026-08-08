@@ -21,7 +21,8 @@ jobs:
       - run: npm run build
       - run: npm run test:pyfa        # 662 assertions vs committed data/
       - run: npm run audit:coverage   # truly silent: 0
-      - run: npm run test:drones     # bandwidth reads attr 1272, active counts drones
+      - run: npm run test:drones      # bandwidth reads attr 1272, active counts drones
+      - run: npm run test:smoke       # built dist/: base entry + batteries-included entry
       # NOTE: the per-ship differential harness (npm run diff) is deliberately
       # NOT a per-push gate — it needs a pyfa clone + Python/eve.db build and
       # compares against pyfa's own (possibly drifting) SDE, so it lives in a

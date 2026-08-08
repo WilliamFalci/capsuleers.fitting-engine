@@ -56,10 +56,11 @@
     "diff:recalibrate": "node scripts/recalibrate-pyfa-pin.mjs",
     "test:pyfa": "tsx test/parity/run-pyfa-parity.ts",
     "test:drones": "tsx test/drone-bandwidth.ts",
+    "test:smoke": "node test/smoke.mjs && node test/smoke-node.mjs",
     "audit:coverage": "tsx test/effect-coverage-audit.ts",
     "drift": "node scripts/check-pyfa-drift.mjs",
     "drift:update": "node scripts/check-pyfa-drift.mjs --update",
-    "prepublishOnly": "npm run typecheck && npm run build"
+    "prepublishOnly": "npm run typecheck && npm run build && npm run test:smoke"
   },
   "devDependencies": {
     "@types/node": "^22.19.19",
