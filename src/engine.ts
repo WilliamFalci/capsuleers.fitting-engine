@@ -560,7 +560,13 @@ function deriveStats(
         const t = dataset.getType(droneItem.typeID)
         if (!t) continue
         const volume = t.volume ?? 0
-        const bandwidth = droneItem.getBase(ATTR.DRONE_BANDWIDTH) ?? 0
+        // 1272 (`droneBandwidthUsed`), NOT 1271. 1271 is `droneBandwidth`, the
+        // SHIP's cap — no drone carries it, so reading it here missed on every
+        // type and fell back to 0: bandwidth used was always 0, on every fit.
+        // Measured in the bundle: Hobgoblin II / Warrior II 1272=5, Ogre II /
+        // Garde II 1272=25, none of them has 1271; ships are the mirror image
+        // (Dominix 1271=125, Paladin 25, Retribution 0).
+        const bandwidth = droneItem.getBase(ATTR.DRONE_BANDWIDTH_USED) ?? 0
         droneBayUsed += volume * fd.countTotal
         droneBwUsed += bandwidth * fd.countActive
     }
@@ -669,7 +675,10 @@ function deriveStats(
             bayMax: ship.getFinal(ATTR.DRONE_CAPACITY, 0),
             bandwidthUsed: droneBwUsed,
             bandwidthMax: ship.getFinal(ATTR.DRONE_BANDWIDTH, 0),
-            active: ctx.drones.filter(d => d.state === 'ACTIVE').length,
+            // Drones in space, not drone GROUPS in space. `ctx.drones` holds one
+            // ItemState per FitDrone stack, so filtering by state counted five
+            // active Ogre IIs as 1 — and this is the number bandwidth gates.
+            active: fit.drones.reduce((n, d) => n + d.countActive, 0),
             // Drone control range is the ship base (default 20 km, attr 458)
             // PLUS the character's accumulated skill bonus on the same attr.
             // Drone Avionics V + Advanced Drone Avionics V each ModAdd to

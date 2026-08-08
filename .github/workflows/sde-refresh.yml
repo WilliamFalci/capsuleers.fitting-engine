@@ -58,7 +58,7 @@ jobs:
           # the issue body. Without it, diagnosing a blocked refresh meant
           # digging through raw Actions logs to find which of the two gates broke.
           set +e
-          npm run test:pyfa > gate.log 2>&1 && npm run audit:coverage >> gate.log 2>&1
+          npm run test:pyfa > gate.log 2>&1 && npm run audit:coverage >> gate.log 2>&1 && npm run test:drones >> gate.log 2>&1
           echo "ok=$?" >> "$GITHUB_OUTPUT"
           set -e
           cat gate.log

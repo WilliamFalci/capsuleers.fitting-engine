@@ -39,7 +39,7 @@ jobs:
       # Gate the release on the parity suite (release gate) + the coverage audit,
       # so a code release can never ship a regression.
       - name: Parity + coverage gate
-        run: npm run test:pyfa && npm run audit:coverage
+        run: npm run test:pyfa && npm run audit:coverage && npm run test:drones
 
       - name: Bump, publish & push
         env:

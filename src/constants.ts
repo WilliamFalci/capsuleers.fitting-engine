@@ -190,7 +190,8 @@ export const ATTR = {
     CPU_USED: 50,
     UPGRADE_CAPACITY: 1132,     // calibration max
     UPGRADE_COST: 1153,         // calibration used per rig
-    DRONE_BANDWIDTH: 1271,
+    DRONE_BANDWIDTH: 1271,      // ship: the cap, Mbit/s
+    DRONE_BANDWIDTH_USED: 1272, // drone: what ONE drone of this type occupies
     DRONE_CAPACITY: 283,
 
     // ---- Slots (ship attributes telling how many slots) ----

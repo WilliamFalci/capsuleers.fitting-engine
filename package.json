@@ -55,6 +55,7 @@
     "diff": "node test/diff/run-diff.mjs",
     "diff:recalibrate": "node scripts/recalibrate-pyfa-pin.mjs",
     "test:pyfa": "tsx test/parity/run-pyfa-parity.ts",
+    "test:drones": "node test/drone-bandwidth.mjs",
     "audit:coverage": "tsx test/effect-coverage-audit.ts",
     "drift": "node scripts/check-pyfa-drift.mjs",
     "drift:update": "node scripts/check-pyfa-drift.mjs --update",
