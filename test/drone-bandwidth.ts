@@ -14,28 +14,32 @@
  * 375 m³ of drones but its 125 Mbit/s only passes five Ogre IIs — so both
  * numbers are load-bearing, not cosmetic.
  */
-import { computeFit, buildAllVSkillProfile, loadBundledDataset } from '../dist/node.js'
+// Da `src/`, come la suite di parita': il gate di release gira PRIMA di
+// `npm run build`, quindi un test che importa da `dist/` non trova nulla.
+import { computeFit } from '../src/index'
+import { buildAllVSkillProfile, loadBundledDataset } from '../src/node'
+import type { Fit } from '../src/types'
 
 const DOMINIX = 645, OGRE_II = 2446, HOBGOBLIN_II = 2456
 
 const dataset = await loadBundledDataset()
 const skillProfile = buildAllVSkillProfile(dataset)
-const compute = fit => computeFit(fit, dataset, { skillProfile })
+const compute = (fit: Fit) => computeFit(fit, dataset, { skillProfile })
 
 let fails = 0
-const check = (label, ok, val) => {
+const check = (label: string, ok: boolean, val: unknown) => {
     console.log(`${ok ? 'PASS' : 'FAIL'}  ${label.padEnd(46)} ${val}`)
     if (!ok) fails++
 }
 
-const baseFit = drones => ({
+const baseFit = (drones: Fit['drones']): Fit => ({
     name: 'BW regression', shipTypeID: DOMINIX, visibility: 'PRIVATE', tags: [],
     modules: [], subsystems: [], fighters: [], cargo: [], implants: [], boosters: [], drones,
 })
 
 // The attributes the engine depends on, asserted against the bundle itself —
 // so a future SDE reshuffle fails here rather than silently zeroing the stat.
-const attr = (typeID, id) => dataset.getType(typeID)?.attributes.find(a => a.id === id)?.v
+const attr = (typeID: number, id: number) => dataset.getType(typeID)?.attributes.find(a => a.id === id)?.v
 check('SDE: drone carries 1272, not 1271',
     attr(OGRE_II, 1272) === 25 && attr(OGRE_II, 1271) === undefined,
     `Ogre II 1272=${attr(OGRE_II, 1272)} 1271=${attr(OGRE_II, 1271)}`)
