@@ -22,6 +22,7 @@ echo "[oracle] root: $PYFA"
 #    reproducible runs (CI should pin so a moving pyfa master can't flip results);
 #    unset = shallow clone of master (fine for local/manual use).
 PYFA_REF="${PYFA_REF:-}"
+REPIN=0
 if [ ! -d "$PYFA/eos" ]; then
   if [ -n "$PYFA_REF" ]; then
     echo "[oracle] cloning pyfa-org/Pyfa @ $PYFA_REF..."
@@ -32,7 +33,18 @@ if [ ! -d "$PYFA/eos" ]; then
     git clone --depth 1 https://github.com/pyfa-org/Pyfa.git "$PYFA"
   fi
 else
-  echo "[oracle] pyfa already cloned ($(cd "$PYFA" && git rev-parse --short HEAD 2>/dev/null || echo '?'))"
+  # An EXISTING clone must be re-pinned when PYFA_REF has moved. Skipping this
+  # (the old behaviour) silently ran the harness against the previous oracle
+  # after a pin bump — the diff then reports staticdata drift that the new pin
+  # already fixes, and there is nothing on screen to say why.
+  CUR="$(cd "$PYFA" && git rev-parse HEAD 2>/dev/null || echo '')"
+  if [ -n "$PYFA_REF" ] && [ "$CUR" != "$PYFA_REF" ] && [ "${CUR:0:${#PYFA_REF}}" != "$PYFA_REF" ]; then
+    echo "[oracle] re-pinning $(echo "$CUR" | cut -c1-9) -> $PYFA_REF"
+    ( cd "$PYFA" && git fetch --quiet origin && git checkout --quiet "$PYFA_REF" )
+    REPIN=1   # staticdata changed under us: eve.db MUST be rebuilt
+  else
+    echo "[oracle] pyfa already cloned ($(cd "$PYFA" && git rev-parse --short HEAD 2>/dev/null || echo '?'))"
+  fi
 fi
 
 # 2. venv + minimal eos/db_update deps (no wx, no numpy, no matplotlib)
@@ -56,7 +68,7 @@ def __getattr__(name):
 PY
 
 # 4. build gamedata eve.db from the repo's staticdata
-if [ "${1:-}" = "--rebuild" ]; then rm -f "$PYFA/eve.db"; fi
+if [ "${1:-}" = "--rebuild" ] || [ "$REPIN" = "1" ]; then rm -f "$PYFA/eve.db"; fi
 if [ ! -f "$PYFA/eve.db" ]; then
   echo "[oracle] building eve.db (this takes ~30-60s)..."
   ( cd "$PYFA" && PYTHONPATH="$STUBS" "$VENV/bin/python" db_update.py )

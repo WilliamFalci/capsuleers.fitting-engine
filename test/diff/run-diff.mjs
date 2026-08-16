@@ -119,11 +119,27 @@ async function main() {
 
     // Diff.
     const allDiffs = []   // { ship, fitType, key, ours, pyfa, pctDelta }
-    let okFits = 0, oracleFail = 0, ourFail = 0
+    const driftByType = new Map()   // typeID -> { typeID, kind, name, fits: string[] }
+    let okFits = 0, oracleFail = 0, ourFail = 0, oracleSkipped = 0
     for (const it of items) {
         const o = oracle.get(it.id)
         if (it.oursFlat.__error) { ourFail++; continue }
         if (!o || !o.ok) { oracleFail++; continue }
+        // The pinned pyfa staticdata didn't know some type this fit uses, so the
+        // oracle silently fitted one item FEWER — the two sides computed
+        // different fits and every resulting stat delta is an artefact. Record
+        // it as pin drift and skip; diffing it would manufacture phantom diffs
+        // (that is exactly how a new Damage Control module once produced 36).
+        if (o.dropped?.length) {
+            oracleSkipped++
+            for (const d of o.dropped) {
+                const e = driftByType.get(d.typeID)
+                    ?? { typeID: d.typeID, kind: d.kind, name: typeName(dataset, d.typeID), fits: [] }
+                e.fits.push(`${it.ship.name} / ${it.fitType}`)
+                driftByType.set(d.typeID, e)
+            }
+            continue
+        }
         let pyfaFlat = flatten(o.stats)
         if (args.stats) {
             const keep = (k) => args.stats.some(g => k.startsWith(g))
@@ -141,13 +157,40 @@ async function main() {
     // --strict to fail on any diff (ignore the known-diffs list).
     const unexpected = args.strict ? allDiffs : allDiffs.filter(d => !isKnownDiff(d))
     const accepted = args.strict ? [] : allDiffs.filter(isKnownDiff)
+    const drift = [...driftByType.values()].sort((a, b) => b.fits.length - a.fits.length)
 
-    report(unexpected, { total: items.length, okFits, oracleFail, ourFail, accepted }, args)
-    process.exit(unexpected.length ? 1 : 0)
+    report(unexpected, { total: items.length, okFits, oracleFail, ourFail, oracleSkipped, accepted, drift }, args)
+    // Drift fails the run too: a stale pin silently shrinks coverage, and the
+    // report names the fix. It is reported SEPARATELY from stat diffs so a red
+    // run is diagnosable at a glance ("bump the pin" vs "the engine moved").
+    process.exit(unexpected.length || drift.length ? 1 : 0)
+}
+
+/** Resolve a typeID to a name across every dataset bucket (for drift reporting). */
+function typeName(dataset, typeID) {
+    for (const bucket of Object.values(dataset.typesByBucket ?? {})) {
+        const t = bucket?.get?.(typeID)
+        if (t?.name) return t.name
+    }
+    return '?'
 }
 
 function report(diffs, summary, args) {
     if (args.json) { console.log(JSON.stringify({ summary, diffs }, null, 2)); return }
+
+    // Types our SDE bundle has but the PINNED pyfa staticdata does not. This is
+    // oracle staleness, NOT an engine regression — surfacing it separately is
+    // what keeps CCP shipping a new item from looking like we broke something.
+    const drift = summary.drift ?? []
+    if (drift.length) {
+        console.log(`\n=== ORACLE SDE DRIFT (${drift.length} type${drift.length === 1 ? '' : 's'} absent from the pinned pyfa) ===`)
+        console.log(`  The pinned oracle cannot fit these, so ${summary.oracleSkipped} fit(s) were SKIPPED as not comparable.`)
+        console.log('  Fix: bump PYFA_REF in .github/workflows/diff-parity.yml to a pyfa whose')
+        console.log('  staticdata carries them, re-run `npm run diff:setup`, then `npm run diff:recalibrate`.')
+        for (const d of drift) {
+            console.log(`    ${String(d.typeID).padEnd(7)} ${String(d.name).padEnd(30)} ${String(d.kind).padEnd(10)} ${d.fits.length} fit${d.fits.length === 1 ? '' : 's'}: ${d.fits.slice(0, 4).join(', ')}${d.fits.length > 4 ? ', …' : ''}`)
+        }
+    }
     const fmt = (v) => v == null ? '—' : (typeof v === 'number' ? (Math.abs(v) >= 100 ? v.toFixed(1) : v.toFixed(3)) : String(v))
     const accepted = summary.accepted ?? []
 
@@ -184,8 +227,12 @@ function report(diffs, summary, args) {
         }
     }
     console.log(`\nSummary: ${summary.okFits}/${summary.total} fits match | ${diffs.length} unexpected diff${diffs.length === 1 ? '' : 's'}` +
-        ` across ${byStat.size} stats | ${accepted.length} accepted | our-fail ${summary.ourFail} | oracle-fail ${summary.oracleFail}`)
-    if (!diffs.length) {
+        ` across ${byStat.size} stats | ${accepted.length} accepted | our-fail ${summary.ourFail} | oracle-fail ${summary.oracleFail}` +
+        ` | oracle-skipped ${summary.oracleSkipped ?? 0}`)
+    if (drift.length) {
+        console.log(`⚠️  Oracle SDE drift — the pin is stale (see above). Engine parity was NOT assessed on ${summary.oracleSkipped} fit(s).`)
+    }
+    if (!diffs.length && !drift.length) {
         console.log(`✅ No unexpected differences — engine matches pyfa across all sampled fits` +
             `${accepted.length ? ` (${accepted.length} documented pyfa float/modelling/per-ship quirks accepted; run --strict to list them as failures)` : ''}.`)
     }

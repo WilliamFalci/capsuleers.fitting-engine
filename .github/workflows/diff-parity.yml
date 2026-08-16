@@ -33,7 +33,7 @@ concurrency:
 
 env:
   # Pin pyfa to the commit the known-diffs registry was calibrated against.
-  PYFA_REF: c8f9fe88ddeaf31b29c90a6e3318275aed29c838
+  PYFA_REF: 8b04f3b271e614b3e103853b44a7851a63d79d0e
 
 jobs:
   diff:
@@ -71,17 +71,35 @@ jobs:
             const fs = require('fs')
             let report = ''
             try { report = fs.readFileSync('diff-report.txt', 'utf8') } catch {}
-            // Keep the issue body small: the UNEXPECTED section + summary line.
-            const start = report.indexOf('=== UNEXPECTED')
+            // Keep the issue body small: from the first reported section onward.
+            // DRIFT is printed before UNEXPECTED, so take whichever comes first.
+            const marks = ['=== ORACLE SDE DRIFT', '=== UNEXPECTED']
+              .map(m => report.indexOf(m)).filter(i => i >= 0)
+            const start = marks.length ? Math.min(...marks) : -1
             const body = start >= 0 ? report.slice(start) : report
+            // Two distinct failure modes, two distinct titles — a stale pin is a
+            // one-line fix, an engine diff is an investigation. Don't conflate.
+            const drifted = report.includes('=== ORACLE SDE DRIFT')
+            const diffed = report.includes('=== UNEXPECTED')
+            const pin = process.env.PYFA_REF.slice(0, 7)
+            const title = drifted && !diffed
+              ? `diff-parity: pinned pyfa staticdata is stale (${pin})`
+              : `diff-parity: unexpected differences vs pyfa (${pin})`
+            const lede = drifted
+              ? 'The pinned pyfa oracle is missing type(s) our SDE bundle carries, so ' +
+                'the affected fits were SKIPPED as not comparable (pyfa would have ' +
+                'computed a DIFFERENT fit). This is oracle staleness, not necessarily ' +
+                'an engine regression — bump `PYFA_REF` below, then re-run ' +
+                '`npm run diff:setup && npm run diff:recalibrate`.'
+              : 'The per-ship differential harness found differences NOT in ' +
+                '`test/diff/known-diffs.mjs`. Either an engine regression, or a ' +
+                'pyfa/SDE drift since the pinned ref.'
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: `diff-parity: unexpected differences vs pyfa (${process.env.PYFA_REF.slice(0,7)})`,
+              title,
               body:
-                'The per-ship differential harness found differences NOT in ' +
-                '`test/diff/known-diffs.mjs`. Either an engine regression, or a ' +
-                'pyfa/SDE drift since the pinned ref.\n\n' +
+                lede + '\n\n' +
                 'Reproduce locally: `npm run diff:setup && npm run diff` ' +
                 '(use `--strict` to re-audit the accepted set).\n\n' +
                 '```\n' + body.slice(0, 5000) + '\n```',

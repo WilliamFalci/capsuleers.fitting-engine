@@ -9,7 +9,7 @@
  * pyfa-specific anomaly. Each entry is annotated with its ROOT CAUSE — it is NOT
  * a place to hide real bugs.
  *
- * Calibrated against pyfa commit: c8f9fe88ddeaf31b29c90a6e3318275aed29c838
+ * Calibrated against pyfa commit: 8b04f3b271e614b3e103853b44a7851a63d79d0e
  * (kept in lock-step with PYFA_REF in .github/workflows/diff-parity.yml.)
  *
  * Matching is by (ship, fitType, statKey). A matched diff is ACCEPTED and does
@@ -36,7 +36,6 @@ export const KNOWN_DIFFS = [
     { ship: "Griffin Navy Issue", fitType: "t2", key: "targeting.droneControlRange", reason: "pyfa per-ship drone-control-range anomaly (bare-hull, module-independent)" },
     { ship: "Malediction", fitType: "non-bonused", key: "capacitor.secondsToEmpty", reason: "Ancillary Shield Booster charge-powered cap duty cycle not modelled (niche)" },
     { ship: "Mastodon", fitType: "non-bonused", key: "navigation.signatureRadius", reason: "multi-module sig stacking (MWD+rig) — per-effect penaltyGroups regress parity suite" },
-    { ship: "Miasmos", fitType: "mixed", key: "capacitor.secondsToEmpty", reason: "FP precision (+1.3%) on cap-sim secondsToEmpty (integer cycle times vs pyfa float)" },
     { ship: "Rokh", fitType: "non-bonused", key: "navigation.signatureRadius", reason: "multi-module sig stacking (MWD+MJD+rig) — per-effect penaltyGroups regress parity suite" },
     { ship: "Scimitar", fitType: "non-bonused", key: "navigation.maxVelocity", reason: "FP precision (~2%) on prop-mod velocity" },
     { ship: "Stabber", fitType: "non-bonused", key: "navigation.maxVelocity", reason: "FP precision (~2%) on prop-mod velocity" },

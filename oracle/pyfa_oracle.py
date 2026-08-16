@@ -53,7 +53,28 @@ def _item(tid):
     return eos.db.getItem(int(tid))
 
 
+def _known(tid):
+    """True if the PINNED pyfa staticdata knows this typeID.
+
+    A type present in OUR SDE bundle but absent here is pin drift, not an engine
+    difference — and silently dropping it (the old behaviour) made the two sides
+    compute DIFFERENT fits, manufacturing phantom stat diffs. Callers record the
+    miss so run-diff can report it as drift and skip the incomparable fit.
+    """
+    try:
+        return _item(tid) is not None
+    except Exception:
+        return False
+
+
 def build_fit(spec):
+    """Build the pyfa fit. Returns (fit, dropped) where `dropped` lists every
+    typeID the pinned staticdata could not supply."""
+    dropped = []
+
+    def _miss(tid, kind):
+        dropped.append({"typeID": int(tid), "kind": kind})
+
     fit = Fit()
     fit.ship = Ship(_item(spec["shipTypeID"]))
     fit.character = _CHAR
@@ -62,6 +83,9 @@ def build_fit(spec):
 
     # Subsystems first so the hull's slot layout is correct before modules.
     for s in spec.get("subsystems", []):
+        if not _known(s["typeID"]):
+            _miss(s["typeID"], "subsystem")
+            continue
         try:
             sm = Module(_item(s["typeID"]))
             fit.modules.append(sm)
@@ -70,12 +94,18 @@ def build_fit(spec):
             pass
 
     if spec.get("modeTypeID"):
-        try:
-            fit.mode = fit.ship.checkModeItem(_item(spec["modeTypeID"]))
-        except Exception:
-            pass
+        if not _known(spec["modeTypeID"]):
+            _miss(spec["modeTypeID"], "mode")
+        else:
+            try:
+                fit.mode = fit.ship.checkModeItem(_item(spec["modeTypeID"]))
+            except Exception:
+                pass
 
     for mod in spec.get("modules", []):
+        if not _known(mod["typeID"]):
+            _miss(mod["typeID"], "module")
+            continue
         try:
             m = Module(_item(mod["typeID"]))
         except Exception:
@@ -94,12 +124,18 @@ def build_fit(spec):
         except Exception:
             pass
         if mod.get("chargeTypeID"):
-            try:
-                m.charge = _item(mod["chargeTypeID"])
-            except Exception:
-                pass
+            if not _known(mod["chargeTypeID"]):
+                _miss(mod["chargeTypeID"], "charge")
+            else:
+                try:
+                    m.charge = _item(mod["chargeTypeID"])
+                except Exception:
+                    pass
 
     for d in spec.get("drones", []):
+        if not _known(d["typeID"]):
+            _miss(d["typeID"], "drone")
+            continue
         try:
             dr = Drone(_item(d["typeID"]))
             dr.amount = int(d.get("count", 0))
@@ -109,7 +145,7 @@ def build_fit(spec):
         except Exception:
             pass
 
-    return fit
+    return fit, dropped
 
 
 def _num(v):
@@ -192,8 +228,11 @@ def main():
     for spec in specs:
         rec = {"id": spec.get("id")}
         try:
-            rec["stats"] = stats(build_fit(spec))
+            fit, dropped = build_fit(spec)
+            rec["stats"] = stats(fit)
             rec["ok"] = True
+            if dropped:
+                rec["dropped"] = dropped
         except Exception as e:
             rec["ok"] = False
             rec["error"] = repr(e)
