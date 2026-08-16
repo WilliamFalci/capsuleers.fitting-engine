@@ -49,6 +49,35 @@ The hard invariant: the engine NEVER trades away `test:pyfa` 662/0 to satisfy
 this harness. The accepted diffs persist precisely because the only "fixes" for
 them regress that suite (see `known-diffs.mjs` for the per-entry rationale).
 
+### Oracle SDE drift (a stale pin, NOT an engine diff)
+
+Our `data/` bundle is refreshed automatically; the pyfa pin is not. So after a
+CCP release our bundle can carry a type the pinned oracle has never heard of.
+`eos.db.getItem` raises on it, and the oracle used to **silently drop the item** —
+pyfa then computed a *different fit*, and every resulting stat delta was an
+artefact. That is not hypothetical: one new Damage Control module (`Breach
+Control`, 95414) manufactured **36 phantom diffs** across 19 stats, and an Aralez
+rework added 10 more, while `oracle-fail 0` in the summary read as reassurance.
+
+The oracle now reports each unsupplied typeID, and the runner:
+
+- **skips** the affected fits (they are not comparable) and counts them as
+  `oracle-skipped` in the summary,
+- prints an `=== ORACLE SDE DRIFT ===` section naming each typeID, its name and
+  the fits it hit,
+- **exits non-zero** — a stale pin silently shrinks coverage, so it must be
+  visible; CI titles that issue *"pinned pyfa staticdata is stale"* rather than
+  *"unexpected differences"*.
+
+The fix is a pin bump, never a `known-diffs.mjs` entry:
+
+```bash
+cd .pyfa && git fetch origin master && git checkout <new-sha> && cd ..
+npm run diff:setup -- --rebuild     # rebuild eve.db at the new pin
+npm run diff:recalibrate            # moves PYFA_REF + the registry together
+npm run diff                        # must exit 0
+```
+
 ## The 4 fits per ship
 
 - **bonused** — weapons of the ship's primary hardpoint system (T2) + matching mods
