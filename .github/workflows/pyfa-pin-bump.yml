@@ -1,0 +1,151 @@
+name: pyfa-pin-bump
+
+# Keep the pyfa oracle pin moving on its own.
+#
+# The bundled SDE refreshes itself daily (sde-refresh.yml); the pyfa pin did NOT.
+# That asymmetry is what filed issue #34: CCP shipped a new Damage Control
+# module (Breach Control) and reworked the Aralez, our bundle picked both up, and
+# the pinned June oracle knew neither — 46 phantom "engine" diffs that were pure
+# oracle staleness. The longer the pin sits, the more of the roster drifts out of
+# comparability, so the harness slowly stops testing what it claims to test.
+#
+# The hard rule this job respects: `known-diffs.mjs` entries are HUMAN-OWNED. A
+# bump is auto-committed ONLY when recalibration produces nothing to classify
+# (exit 0). The moment a real stat difference appears, it goes to a PR instead —
+# an auto-accepted diff is exactly how a regression gets laundered into "known".
+#
+# Nothing here reaches npm: PYFA_REF and the registry are test-harness files,
+# outside package.json `files`. No version bump, no publish, no consumer impact.
+
+on:
+  schedule:
+    # Sundays 12:00 UTC — ahead of Monday's pyfa-drift (06:00) and diff-parity
+    # (07:00), so those run against a pin that was validated the day before.
+    - cron: '0 12 * * 0'
+  workflow_dispatch:
+    inputs:
+      pyfa_ref:
+        description: 'Target pyfa ref (default: pyfa master HEAD)'
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: pyfa-pin-bump
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.13' }
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Resolve current + target pin
+        id: pins
+        run: |
+          CUR=$(grep -oP 'PYFA_REF:\s*\K[0-9a-f]{7,40}' .github/workflows/diff-parity.yml)
+          TARGET="${{ github.event.inputs.pyfa_ref }}"
+          if [ -z "$TARGET" ]; then
+            TARGET=$(git ls-remote https://github.com/pyfa-org/Pyfa.git refs/heads/master | cut -f1)
+          fi
+          if [ -z "$CUR" ] || [ -z "$TARGET" ]; then
+            echo "::error::could not resolve pins (current='$CUR' target='$TARGET')"; exit 1
+          fi
+          echo "current=$CUR"                >> "$GITHUB_OUTPUT"
+          echo "target=$TARGET"              >> "$GITHUB_OUTPUT"
+          echo "short=${TARGET:0:7}"         >> "$GITHUB_OUTPUT"
+          if [ "$CUR" = "$TARGET" ]; then
+            echo "moved=false" >> "$GITHUB_OUTPUT"
+            echo "Pin already at $TARGET — nothing to do."
+          else
+            echo "moved=true" >> "$GITHUB_OUTPUT"
+            echo "Pin ${CUR:0:7} -> ${TARGET:0:7}"
+          fi
+
+      - name: Build oracle at the target pin
+        if: steps.pins.outputs.moved == 'true'
+        env:
+          PYFA_REF: ${{ steps.pins.outputs.target }}
+        run: npm run diff:setup
+
+      # Rewrites known-diffs.mjs + PYFA_REF, then exits 1 iff some diff needs a
+      # human root cause. Tee'd to a FILE, not through `| tee` — a pipeline would
+      # report tee's status and mask the very exit code this job branches on.
+      - name: Recalibrate registry + pin
+        id: recal
+        if: steps.pins.outputs.moved == 'true'
+        run: |
+          set +e
+          npm run diff:recalibrate > recal.log 2>&1
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+          set -e
+          cat recal.log
+
+      - name: Commit the bump (nothing to classify)
+        id: commit
+        if: steps.pins.outputs.moved == 'true' && steps.recal.outputs.code == '0'
+        run: |
+          if git diff --quiet -- test/diff/known-diffs.mjs .github/workflows/diff-parity.yml; then
+            echo "Pin moved upstream but produced no on-disk change — skipping commit."
+            exit 0
+          fi
+          git config user.name  "capsuleers-bot"
+          git config user.email "bot@capsuleers.app"
+          git add test/diff/known-diffs.mjs .github/workflows/diff-parity.yml
+          git commit -m "chore(diff): bump pyfa oracle pin to ${{ steps.pins.outputs.short }} [auto]" \
+                     -m "Recalibrated with nothing to classify. See recal summary in the run log."
+          git push
+
+      # A new stat difference is a judgement call — the registry demands a proven
+      # root cause per entry, so it must never be written by a robot. Hand the
+      # recalibrated tree to a human as a PR rather than committing it.
+      - name: Open a PR for entries needing classification
+        if: steps.pins.outputs.moved == 'true' && steps.recal.outputs.code != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet -- test/diff/known-diffs.mjs .github/workflows/diff-parity.yml; then
+            echo "::error::recalibration failed before writing anything — see the log above."
+            exit 1
+          fi
+          BR="chore/pyfa-pin-${{ steps.pins.outputs.short }}"
+          git config user.name  "capsuleers-bot"
+          git config user.email "bot@capsuleers.app"
+          git checkout -B "$BR"   # -B, not -b: a re-run must reuse the branch, not abort
+          git add test/diff/known-diffs.mjs .github/workflows/diff-parity.yml
+          git commit -m "chore(diff): pyfa pin -> ${{ steps.pins.outputs.short }} (entries PENDING REVIEW)"
+          git push -u origin "$BR" --force-with-lease
+          {
+            echo "Automated pyfa pin bump \`${{ steps.pins.outputs.current }}\` → \`${{ steps.pins.outputs.target }}\`."
+            echo
+            echo "Recalibration produced entries marked **PENDING REVIEW**, so this was NOT"
+            echo "auto-committed. Each one needs a real root cause before merge:"
+            echo "a genuine engine bug → **fix \`src/\`**; a pyfa float/modelling/per-ship"
+            echo "quirk → **replace the reason** with the proven cause. Never merge a"
+            echo "PENDING entry as-is — that turns a regression into an accepted diff."
+            echo
+            echo "Then: \`npm run test:pyfa\` (must stay 662/0) and \`npm run diff\` (must exit 0)."
+            echo
+            echo '```'
+            tail -c 4000 recal.log
+            echo '```'
+          } > pr-body.md
+          gh pr create --base master --head "$BR" \
+            --title "chore(diff): pyfa pin → ${{ steps.pins.outputs.short }} (needs classification)" \
+            --body-file pr-body.md \
+            --label diff-parity
+
+      # Surface a blocked bump as a RED run. Filing the PR and exiting 0 would
+      # leave the Actions list green while the pin quietly stops advancing.
+      - name: Fail the run when classification is pending
+        if: steps.pins.outputs.moved == 'true' && steps.recal.outputs.code != '0'
+        run: exit 1

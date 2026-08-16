@@ -140,6 +140,22 @@ ones, marks genuinely-new diffs `PENDING REVIEW`, rewrites `known-diffs.mjs`, an
 bumps `PYFA_REF`. It exits 1 while any entry is `PENDING REVIEW`. The human still
 classifies the new diffs — auto-accepting them all would mask real regressions.
 
+**The pin also advances on its own** — [`pyfa-pin-bump.yml`](.github/workflows/pyfa-pin-bump.yml),
+Sundays 12:00 UTC, ahead of Monday's `pyfa-drift` (06:00) + `diff-parity` (07:00).
+It moves the pin to pyfa master, recalibrates, and **auto-commits only when the
+recalibration has nothing to classify**; the moment a genuinely-new stat diff
+appears it opens a PR labelled `diff-parity` instead and fails the run, because a
+robot must never write a `known-diffs.mjs` reason. Nothing there is published —
+`PYFA_REF` and the registry are harness files, outside package.json `files`.
+
+Why it exists: `data/` refreshed itself daily and the pin did not, so the oracle
+fell behind CCP. Issue #34 was that asymmetry — a new module (`Breach Control`)
+plus an Aralez rework produced 46 phantom "engine" diffs, and the oracle had been
+dropping the unknown types *silently*, so `oracle-fail 0` read as reassurance
+while two fits ran a module short. The oracle now declares what it cannot supply
+and the runner skips those fits as `oracle-skipped` (see
+[test/diff/README.md](test/diff/README.md)).
+
 ## Maintenance flows
 
 See `MAINTENANCE.md` (the two update streams) and `RELEASE.md` (publish + how the
