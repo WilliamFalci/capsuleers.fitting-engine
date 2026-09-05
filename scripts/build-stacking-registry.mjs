@@ -35,7 +35,7 @@
  * Reads the pyfa checkout the diff oracle already pins (.pyfa), so the registry
  * and the oracle can never describe two different pyfa versions.
  */
-import { createReadStream } from 'node:fs'
+import { createReadStream, existsSync } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
 import readline from 'node:readline'
 import path from 'node:path'
@@ -238,6 +238,17 @@ async function sdeEffectAttributes() {
 }
 
 async function main() {
+    for (const [what, file, how] of [
+        ['the pinned pyfa checkout', EFFECTS_PY, 'npm run diff:setup'],
+        ['the raw SDE', SDE_ATTRS, 'node scripts/fetch-sde.mjs --force'],
+    ]) {
+        if (!existsSync(file)) {
+            console.error(`[stacking] ${what} is missing (${path.relative(ROOT, file)}) — run \`${how}\` first.`)
+            console.error('[stacking]   the registry maps pyfa attribute NAMES onto ids, and the shipped')
+            console.error('[stacking]   bundle carries only PUBLISHED attributes, so the raw SDE is required.')
+            process.exit(1)
+        }
+    }
     const src = await readFile(EFFECTS_PY, 'utf8')
     const attrIds = await attributeIds()
     const { perEffect, calls, penalisedCalls } = classify(src)

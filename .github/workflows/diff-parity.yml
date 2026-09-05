@@ -44,6 +44,12 @@ env:
 jobs:
   diff:
     runs-on: ubuntu-latest
+    # Hoisted to the JOB so a step's `if:` can read it — a step's own `env:` is
+    # NOT visible to its own condition, so `if: env.X != ''` next to `env: X:
+    # ${{ secrets.X }}` silently never runs. That would have skipped the real-fit
+    # corpus on every scheduled run while the diff still reported success.
+    env:
+      EVEWORKBENCH_API_KEY: ${{ secrets.EVEWORKBENCH_API_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -59,6 +65,14 @@ jobs:
           PYFA_REF: ${{ github.event.inputs.pyfa_ref || env.PYFA_REF }}
         run: npm run diff:setup
 
+      # The stacking registry resolves pyfa's attribute NAMES to ids against the
+      # RAW SDE, not the shipped bundle: the bundle carries only published
+      # attributes and several penalised ones (warpSpeedMultiplier, 600) are
+      # not published. `.sde-src/` is gitignored, so stage it — `--force`
+      # because the plain fetch short-circuits when data/.build already matches.
+      - name: Stage the raw SDE (for the stacking registry)
+        run: node scripts/fetch-sde.mjs --force
+
       # The registry of which (effect, attribute) pairs pyfa stack-penalises is
       # GENERATED from the pinned pyfa. If it is stale the engine silently
       # penalises the wrong set, so check it before trusting a green diff.
@@ -67,8 +81,6 @@ jobs:
 
       - name: Harvest the EVE Workbench corpus
         if: env.EVEWORKBENCH_API_KEY != ''
-        env:
-          EVEWORKBENCH_API_KEY: ${{ secrets.EVEWORKBENCH_API_KEY }}
         run: npm run corpus:fetch
 
       - name: Differential parity (all corpora)
