@@ -111,8 +111,10 @@ Every command is an `npm run <name>`.
 | `clean` | `rm -rf dist` | when a stale build misbehaves |
 | `test:pyfa` | 662-assertion Pyfa fixture suite vs committed `data/` | **the gate** — must be 662/0 |
 | `diff:setup` | clone pyfa + venv + build `eve.db` under `.pyfa/` | once, or after `--rebuild` / pin change |
-| `diff` | per-ship differential vs the pyfa oracle | before commit; exit 0 = no unexpected diffs |
+| `diff` | differential vs the pyfa oracle, over three corpora | before commit; exit 0 = no unexpected diffs |
 | `diff:recalibrate` | regen `known-diffs.mjs` + bump pin (see §7) | ONLY when deliberately bumping pyfa |
+| `corpus:fetch` | harvest 2-3 REAL fits per hull from EVE Workbench into `.workbench/` | once, or to refresh the real-fit corpus (needs `EVEWORKBENCH_API_KEY`) |
+| `stacking:build` | regenerate `src/stackingPenalised.ts` from the pinned pyfa | after a pin bump; `-- --check` fails if stale |
 | `audit:coverage` | list SDE effects on fittable types with no handler | before commit; want "truly silent: 0" |
 | `drift` | diff pyfa `effects.py` vs snapshot + our handler set | weekly CI; run when porting effects |
 | `drift:update` | advance the effects snapshot | after you've handled the drift |
@@ -126,6 +128,10 @@ and a trivial fit computes.
 
 ```bash
 npm run diff                       # all published ships × 4 generated fits
+npm run diff -- --source=workbench # 2-3 REAL published fits per hull
+npm run diff -- --source=implants  # implant sets + boosters (drawbacks off AND on)
+npm run diff -- --source=all       # every corpus in one run
+npm run diff -- --per-hull=2       # fewer real fits per hull
 npm run diff -- --ships=587,29990  # only these typeIDs
 npm run diff -- --group=Loki       # ships whose group name contains "Loki"
 npm run diff -- --limit=20         # first N ships (fast iteration)
@@ -165,16 +171,37 @@ This is correctness ground truth. **Never weaken it to make another check pass.*
 ## 5. Validation suite #2 — `npm run diff` (the wide net)
 
 The fixture suite is deep but narrow (23 fits). The differential harness is
-broad: it **generates 4 fits for every published ship** and diffs every stat
-against a **headless pyfa-org/Pyfa** oracle.
+broad: it diffs every stat against a **headless pyfa-org/Pyfa** oracle over
+three corpora, each answering a question the others can't.
+
+| `--source` | corpus | size |
+|---|---|---|
+| `generated` (default) | 4 synthetic fits for every published ship | 1 692 fits |
+| `workbench` | 2-3 REAL fits per hull, published on EVE Workbench | 913 fits / 330 hulls |
+| `implants` | every implant SET + ship-affecting booster, drawbacks off AND on | 1 857 fits |
+
+The generated corpus is built by OUR OWN slot/charge predicates, so alone it
+only exercises what we already believe fits. That blind spot was expensive: the
+real-fit corpus found six engine bugs on its first run and the implant corpus
+three more that no module-only fit can reach. **Run all three before claiming
+parity.**
 
 - `oracle/pyfa_oracle.py` runs pyfa's `eos` (wx-free) over a batch of fit-specs
   → normalized stats. Built once by `npm run diff:setup` (clone + venv + eve.db).
-- `test/diff/fit-generator.mjs` deterministically builds the 4 fits per ship
-  (bonused / non-bonused / t2 / mixed), seeded by shipTypeID.
+  It also answers a `{"op":"known"}` preflight, so a corpus can drop items the
+  pinned pyfa has never heard of and SAY SO instead of producing incomparable
+  fits.
+- `test/diff/fit-generator.mjs` deterministically builds the 4 synthetic fits
+  per ship (bonused / non-bonused / t2 / mixed), seeded by shipTypeID.
+- `test/diff/fit-sources.mjs` builds the workbench + implant corpora.
 - `test/diff/stat-schema.mjs` maps our `derived` block ↔ pyfa accessors + the
   comparison tolerance.
 - `test/diff/run-diff.mjs` orchestrates, diffs, partitions, reports, sets exit.
+
+**A corpus that shrinks must say so.** Unparseable fits, missing corpora and
+items absent from the pinned pyfa are printed as coverage notes — a corpus that
+quietly gets smaller while still reporting "no differences" is the one failure
+this harness exists to prevent.
 
 **Exit 0 iff there are no _unexpected_ diffs.** A documented set of pyfa
 float / modelling / per-ship quirks lives in
@@ -230,19 +257,21 @@ headline-stat impact) so `audit:coverage` stays honest.
 
 ## 7. Bumping the pinned pyfa version (special workflow)
 
-`PYFA_REF` in `.github/workflows/diff-parity.yml` and `known-diffs.mjs` are
-calibrated against **one** pyfa commit. **Move them together, never by hand:**
+`PYFA_REF` in `.github/workflows/diff-parity.yml`, `known-diffs.mjs` and the
+GENERATED `src/stackingPenalised.ts` are calibrated against **one** pyfa commit.
+**Move them together, never by hand:**
 
 ```bash
 rm -rf .pyfa
 PYFA_REF=<new-pyfa-commit> npm run diff:setup   # rebuild oracle at the new pin
+npm run stacking:build                          # regen the stacking registry FROM that pyfa
 npm run diff:recalibrate                         # regen known-diffs.mjs + bump PYFA_REF
 #   → it carries forward kept reasons, drops resolved entries, and marks
 #     genuinely-new diffs "PENDING REVIEW" (exits 1 until you classify them).
 #   For each PENDING entry: real bug → FIX the engine (don't accept it);
 #                           pyfa quirk → replace the reason with the root cause.
 npm run test:pyfa     # must stay 662/0
-npm run diff          # must exit 0
+npm run diff -- --source=all   # must exit 0 on every corpus
 ```
 
 ---

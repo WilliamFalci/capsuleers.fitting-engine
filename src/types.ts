@@ -25,6 +25,11 @@ export interface SdeAttribute {
     stackable: boolean
     attributeCategoryID?: number
     dataType?: number
+    /** Attribute whose value CAPS this one (EVE `maxAttributeID`). Read off the
+     *  same item, so a hull can raise its own ceiling. */
+    maxAttributeID?: number
+    /** Attribute whose value FLOORS this one (EVE `minAttributeID`). */
+    minAttributeID?: number
 }
 
 export interface SdeUnit {
@@ -490,7 +495,9 @@ export interface DerivedStats {
         signatureRadius: number
         scanResolution: number
         sensorStrength: number
-        sensorType: 'radar' | 'ladar' | 'magnetometric' | 'gravimetric' | 'unknown'
+        /** Strongest sensor's type; `multispectral` when two or more tie
+         *  (pyfa's `scanType`). */
+        sensorType: 'radar' | 'ladar' | 'magnetometric' | 'gravimetric' | 'multispectral' | 'unknown'
     }
     drones: {
         bayUsed: number

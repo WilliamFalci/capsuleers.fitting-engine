@@ -28,7 +28,7 @@ import {
     SLOT_EFFECT_TO_SLOT_TYPE,
     WEAPON_EFFECT_KIND,
 } from './constants'
-import type { SdeType, SlotType } from './types'
+import type { FittingDataset, SdeType, SlotType } from './types'
 
 /** Read a numeric attribute off an SdeType (raw, before dogma chain). */
 function readAttr(t: SdeType, id: number): number | undefined {
@@ -364,4 +364,47 @@ export function freeHardpointsFor(
     // Launchers stop at 1 even on hulls with multiple launcher slots.
     const groupFree = freeFitGroupSlotsFor(mod, fittedHiModules, dataset)
     return Math.min(hardpointFree, groupFree)
+}
+
+/** Ship group whose hulls always carry a tactical mode. */
+const TACTICAL_DESTROYER_GROUP = 1305
+/** The one hull outside that group that also has modes — pyfa special-cases it
+ *  by NAME for the same reason (`group != "Tactical Destroyer" and name !=
+ *  "Anhinga"`): the Anhinga is an Attack Battlecruiser carrying Primary /
+ *  Secondary / Tertiary modes. */
+const MODED_HULL_NAMES: ReadonlySet<string> = new Set(['Anhinga'])
+/** Group holding the T3D mode items ("<Ship> Defense Mode" etc.). */
+const SHIP_MODIFIERS_GROUP = 1306
+
+/**
+ * The mode a Tactical Destroyer falls back to when the fit names none.
+ *
+ * In game a T3D is ALWAYS in one of its three modes — there is no "no mode"
+ * state — and pyfa encodes that by forcing one: `Ship.validateModeItem(None)`
+ * returns `Mode(modeItems[0])` whenever the hull has modes at all, so every
+ * pyfa T3D fit carries the Defense Mode unless told otherwise.
+ *
+ * We used to leave `mode` unset when a fit didn't name one, which is a state
+ * the game cannot be in, and it showed: a Svipul imported from EFT differed
+ * from pyfa on ELEVEN stats at once (resists, sig, scan resolution, EHP),
+ * because the mode's bonuses were simply absent. Every published Confessor,
+ * Jackdaw, Hecate and Svipul fit was affected.
+ *
+ * Mode items are matched the way pyfa matches them — by NAME prefix within the
+ * "Ship Modifiers" group, since the race field is unreliable — and the default
+ * is the lowest typeID, which is the Defense Mode on every current hull.
+ *
+ * Returns undefined for any hull that has no modes.
+ */
+export function defaultModeTypeIDFor(ship: SdeType, dataset: FittingDataset): number | undefined {
+    if (ship.groupID !== TACTICAL_DESTROYER_GROUP && !MODED_HULL_NAMES.has(ship.name ?? '')) return undefined
+    const prefix = (ship.name ?? '').toLowerCase()
+    if (!prefix) return undefined
+    let best: SdeType | undefined
+    for (const t of dataset.typesByBucket.modules?.values() ?? []) {
+        if (t.groupID !== SHIP_MODIFIERS_GROUP) continue
+        if (!(t.name ?? '').toLowerCase().startsWith(prefix)) continue
+        if (best === undefined || t.id < best.id) best = t
+    }
+    return best?.id
 }

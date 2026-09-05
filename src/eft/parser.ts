@@ -208,7 +208,7 @@ export function parseEft(text: string, dataset: FittingDataset): EftParseResult 
     return { fit, warnings }
 }
 
-type SectionKind = 'modules' | 'drones' | 'cargo'
+type SectionKind = 'modules' | 'drones' | 'cargo' | 'implants'
 
 function classifySection(
     entries: Array<{ line: number; text: string }>,
@@ -218,6 +218,26 @@ function classifySection(
     // Look at the first entry that resolves cleanly. If it carries an "x N"
     // suffix → drones or cargo. If it has no quantity → module (or charge-
     // paired module). If the resolved type is in DRONE category → drones.
+    // An IMPLANT RACK is decided by the WHOLE section, not by its first line —
+    // pyfa: `all(i.isImplant for i in section.itemSpecs)`, where an implant is
+    // an Implant-category type carrying `implantness` (a hardwiring or set
+    // piece) or `boosterness` (a booster). Deciding on the first entry alone
+    // would misread a mixed section, and classifying an implant rack as modules
+    // was worse still: every line then failed `detectSlot` and the pilot's
+    // implants were dropped with a warning nobody reads. Measured on a real
+    // published freighter fit that carried a full High-grade Amulet set.
+    let sawImplant = false
+    let allImplant = true
+    for (const e of entries) {
+        const { name, quantity } = parseEntryName(e.text)
+        const typeID = idx.map.get(name.toLowerCase())
+        if (typeID === undefined) { allImplant = false; continue }
+        const t = idx.types.get(typeID)!
+        if (quantity === null && isFittableImplant(t)) sawImplant = true
+        else allImplant = false
+    }
+    if (sawImplant && allImplant) return 'implants'
+
     for (const e of entries) {
         const { name, quantity } = parseEntryName(e.text)
         const typeID = idx.map.get(name.toLowerCase())
@@ -237,6 +257,23 @@ function classifySection(
         }
     }
     return 'cargo'  // fallback for unknown sections
+}
+
+/** Implant slot attribute (a hardwiring or implant-set piece). */
+const ATTR_IMPLANTNESS = 331
+/** Booster slot attribute. */
+const ATTR_BOOSTERNESS = 1087
+
+const attrValue = (t: SdeType, id: number): number | undefined =>
+    t.attributes?.find(a => a.id === id)?.v
+
+/** pyfa's `ItemSpec.isImplant`: an Implant-category type that declares either
+ *  slot attribute. The category alone is not enough — it also holds items that
+ *  are neither (skill injectors and the like). */
+function isFittableImplant(t: SdeType): boolean {
+    if (t.categoryID !== CATEGORY.IMPLANT) return false
+    return attrValue(t, ATTR_IMPLANTNESS) !== undefined
+        || attrValue(t, ATTR_BOOSTERNESS) !== undefined
 }
 
 function parseEntryName(text: string): { name: string; charge: string | null; quantity: number | null } {
@@ -284,6 +321,26 @@ function consumeEntry(
             countActive: 0,  // EFT doesn't track active count; default all-bay
         }
         fit.drones.push(drone)
+        return
+    }
+
+    // A rack entry with no quantity is FITTED: implantness → implants,
+    // boosterness → boosters (pyfa's `addImplant`). Anything with an `xN`
+    // suffix stays cargo — that is how EVE writes spares.
+    if (sectionKind === 'implants' && quantity === null && isFittableImplant(type)) {
+        const implantSlot = attrValue(type, ATTR_IMPLANTNESS)
+        if (implantSlot !== undefined) {
+            fit.implants.push({ id: tempId(), typeID, slot: implantSlot })
+        } else {
+            fit.boosters.push({
+                id: tempId(), typeID,
+                slot: attrValue(type, ATTR_BOOSTERNESS) ?? 1,
+                // Side effects are opt-in and an EFT cannot express them, so an
+                // imported booster arrives with its drawbacks off — the same
+                // default pyfa gives it.
+                activeSideEffects: [],
+            })
+        }
         return
     }
 

@@ -25,7 +25,7 @@ export { formatEft } from './eft/format'
 export { formatDna, formatMultibuy, formatTypeIds } from './export'
 
 // ---- Lower-level (advanced consumers / tests) ----
-export { ATTR, CATEGORY, SLOT_EFFECT_ID, SLOT_EFFECT_TO_SLOT_TYPE, OPERATION_BY_SDE_CODE, REQUIRED_SKILL_PAIRS, STACKING_PENALTY_K, ACTIVATION_EFFECT_ID, REPAIR_EFFECT_AMOUNT_ATTR, WEAPON_EFFECT_KIND, LEGACY_EFFECT_IDS, OUT_OF_SCOPE_EFFECT_IDS, verifyLegacyEffectIds, type WeaponEffectKind, type LegacyEffectEntry } from './constants'
+export { ATTR, CATEGORY, SLOT_EFFECT_ID, SLOT_EFFECT_TO_SLOT_TYPE, OPERATION_BY_SDE_CODE, REQUIRED_SKILL_PAIRS, STACKING_PENALTY_K, ACTIVATION_EFFECT_ID, REPAIR_EFFECT_AMOUNT_ATTR, WEAPON_EFFECT_KIND, LEGACY_EFFECT_IDS, OUT_OF_SCOPE_EFFECT_IDS, BOOSTER_SIDE_EFFECT_IDS, verifyLegacyEffectIds, type WeaponEffectKind, type LegacyEffectEntry } from './constants'
 export { ModifiedAttribute } from './modifiedAttribute'
 export { ItemState, type ItemKind } from './itemState'
 export { FitContext, moduleAcceptsCharge } from './fitContext'
@@ -70,4 +70,5 @@ export {
     moduleAcceptsChargeType,
     defaultStateForModule,
     isActivatableModule,
+    defaultModeTypeIDFor,
 } from './fitChecks'

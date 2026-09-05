@@ -14,14 +14,12 @@
  *
  * A fit-spec is engine-agnostic: { shipTypeID, fitType, modules, drones, subsystems }.
  */
-import { typeFitsSlotType, isTurretWeapon, isMissileLauncher, canFitModuleOnShip, defaultStateForModule, chargeGroupsForModule, moduleAcceptsAnyCharge, moduleAcceptsChargeType } from '../../dist/index.js'
+import { typeFitsSlotType, isTurretWeapon, isMissileLauncher, canFitModuleOnShip, defaultStateForModule, chargeGroupsForModule, moduleAcceptsAnyCharge, moduleAcceptsChargeType, defaultModeTypeIDFor } from '../../dist/index.js'
 
 const META = { T1: 1, T2: 2, STORYLINE: 3, FACTION: 4, OFFICER: 5, DEADSPACE: 6 }
 const SLOTS = ['HI', 'MED', 'LO', 'RIG']
 const STRATEGIC_CRUISER_GROUP = 963
 const SUBSYSTEM_GROUPS = [954, 955, 956, 957, 958] // defensive/electronic/offensive/propulsion/core
-const TACTICAL_DESTROYER_GROUP = 1305
-const SHIP_MODIFIERS_GROUP = 1306   // T3D mode items live here ("<Ship> Defense Mode" etc.)
 const PROPULSION_MODULE_GROUP = 46  // Afterburners + MWDs; cap a fit at one (two
                                     //   active prop mods is unrealistic and the
                                     //   stacked-speed edge case isn't representative).
@@ -53,22 +51,10 @@ const EXCLUDED_MODULE_GROUPS = new Set([
     515, 1313,
 ])
 
-/** A T3D in-game ALWAYS has a mode active; pyfa auto-assigns modeItems[0] when
- *  none is set — the lowest-typeID mode whose name starts with the ship name
- *  (the Defense Mode). Replicate so resists / sig / speed / targeting match. */
-function defaultModeTypeID(dataset, ship) {
-    // Tactical Destroyers + the Anhinga are the hulls pyfa gives a mandatory
-    // mode (ship.py: `group != "Tactical Destroyer" and name != "Anhinga"`).
-    if (ship.groupID !== TACTICAL_DESTROYER_GROUP && ship.name !== 'Anhinga') return undefined
-    const prefix = (ship.name ?? '').toLowerCase()
-    let best = null
-    for (const t of (dataset.typesByBucket.modules?.values() ?? [])) {
-        if (t.groupID !== SHIP_MODIFIERS_GROUP) continue
-        if (!(t.name ?? '').toLowerCase().startsWith(prefix)) continue
-        if (best === null || t.id < best.id) best = t
-    }
-    return best?.id
-}
+// The T3D default-mode rule now lives in the ENGINE (defaultModeTypeIDFor):
+// it is a property of a fit, not of this harness, and keeping a second copy
+// here is what hid the fact that computeFit didn't apply it — the generated
+// corpus passed a mode explicitly while every real EFT import did not.
 
 const attrV = (t, id) => t.attributes?.find?.(a => a.id === id)?.v
 /** Reject size-inappropriate modules: a rig whose rigSize != the ship's, or any
@@ -217,7 +203,7 @@ export function generateFits(dataset, ship, computeFit, skillProfile) {
     const pool = buildPool(dataset)
     const isT3C = ship.groupID === STRATEGIC_CRUISER_GROUP
     const subsystems = isT3C ? chooseSubsystems(dataset, ship) : []
-    const modeTypeID = defaultModeTypeID(dataset, ship)
+    const modeTypeID = defaultModeTypeIDFor(ship, dataset)
 
     // Resolve real slot/hardpoint/drone capacities via our engine (handles T3C).
     const base = { shipTypeID: ship.id, name: 'base', visibility: 'PRIVATE', tags: [], modules: [], drones: [], fighters: [], cargo: [], implants: [], boosters: [], subsystems: subsystems.map((s, i) => ({ id: `s${i}`, slot: i + 1, typeID: s.typeID })) }

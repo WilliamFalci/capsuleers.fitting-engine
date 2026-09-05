@@ -548,6 +548,44 @@ export const LEGACY_EFFECT_IDS: ReadonlyArray<LegacyEffectEntry> = [
 ] as const
 
 // =============================================================================
+// BOOSTER_SIDE_EFFECT_IDS
+// =============================================================================
+/**
+ * Booster SIDE EFFECTS — the drawbacks a combat booster carries alongside its
+ * bonus (Blue Pill's shield-capacity and capacitor penalties, Crash's armour
+ * and velocity penalties, …).
+ *
+ * They are OPT-IN: in the game the pilot rolls for them, and pyfa models that
+ * with `BoosterSideEffect.active = False` by default, applying an effect only
+ * when the user switches it on (`eos/saveddata/booster.py` — a booster applies
+ * effects that are `passive` OR `boosterSideEffect`, and the latter only when
+ * active). A fit that applies them unconditionally under-reports the ship: a
+ * Strong Blue Pill alone took a Rifter from 562 to 436 shield HP (-22%) and
+ * 312 to 242 GJ of capacitor, on a fit the pilot never asked to be penalised.
+ *
+ * The classification is NOT in the SDE — the effect names are inconsistent
+ * (`boosterShieldCapacityPenalty` is one, but so is
+ * `boosterShieldBoostAmountPenaltyShieldSkills`, while the similarly-named
+ * `shieldBoostAmplifierPassiveBooster` is the BONUS). pyfa hardcodes it as
+ * `type = 'boosterSideEffect'` on twelve handlers in `eos/effects.py`, and this
+ * set is that list. `npm run drift` is what catches pyfa adding a thirteenth.
+ */
+export const BOOSTER_SIDE_EFFECT_IDS: ReadonlySet<number> = new Set([
+    2735, // boosterArmorHpPenalty
+    2736, // boosterArmorRepairAmountPenalty
+    2737, // boosterShieldCapacityPenalty
+    2739, // boosterTurretOptimalRangePenalty
+    2741, // boosterTurretFalloffPenalty
+    2745, // boosterCapacitorCapacityPenalty
+    2746, // boosterMaxVelocityPenalty
+    2747, // boosterTurretTrackingPenalty
+    2748, // boosterMissileVelocityPenalty
+    2749, // boosterMissileExplosionVelocityPenalty
+    2791, // boosterMissileExplosionCloudPenaltyFixed
+    4970, // boosterShieldBoostAmountPenaltyShieldSkills
+])
+
+// =============================================================================
 // OUT_OF_SCOPE_EFFECT_IDS — effects that have empty modifierInfo AND no
 // dedicated handler, but are deliberately NOT implemented because they don't
 // affect the headline panel stats Pyfa shows (EHP / DPS / capacitor / nav /
@@ -565,6 +603,7 @@ export const LEGACY_EFFECT_IDS: ReadonlyArray<LegacyEffectEntry> = [
 //   - fighter-as-projection-source plumbing lands (fighter projection abilities
 //     6431/6434-6437/6442/6464/6465/6485/6554 leave this list).
 // =============================================================================
+
 export const OUT_OF_SCOPE_EFFECT_IDS: ReadonlyArray<LegacyEffectEntry> = [
     // ---- Hardpoint / slot dispatch markers consumed via fitChecks (not a modifier dispatch path). ----
     { id: 40,   name: null, handler: 'fitChecks::isMissileLauncher (hardpoint marker)' },

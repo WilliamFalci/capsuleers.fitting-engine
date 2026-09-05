@@ -103,20 +103,24 @@ export class ModifiedAttribute {
 
         // 4. Post-multiplication phase (stacking-penalized).
         //
-        // Pyfa parity: PostMul and PostPercent stack in SEPARATE penalty
-        // pools per attribute. Pyfa's `eos/calc.py` keys penalty groups by
-        // `(operator, penalized)`, so a Siege Module's PostPercent damage
-        // bonus does NOT compete with Magnetic Field Stabilizer II's
-        // PostMul damage bonus — both apply at full strength minus their
-        // own intra-pool penalty.
+        // PostMul, PostDiv and PostPercent share ONE pool per penalty group,
+        // because in pyfa they are the same operation: `boost()` is a thin
+        // wrapper that turns a percentage into a factor and calls `multiply()`,
+        // and `multiply()` appends to `__penalizedMultipliers[attr][group]`.
         //
-        // Empirically: Moros + 3× Ion Siege Blaster II + Siege Module II
-        // + 2× MagStab II lands at Pyfa's 13 161 weapon DPS only when the
-        // Siege Module bonus and the MagStabs are in different stacking
-        // pools. Combining them undershoots by ~4 % (gives 12 648).
+        // These used to be two separate pools. That was a workaround for a
+        // coarser stacking model, not a property of pyfa: a sieged Moros only
+        // reached pyfa's 13 161 weapon DPS if the Siege Module's bonus and the
+        // Magnetic Field Stabilizers were kept apart. The real reason they
+        // don't compete is that pyfa does not penalise the Siege Module's
+        // turret damage bonus at all — now encoded per (effect, attribute) in
+        // stackingPenalised.ts — so the pools can be one, as they are upstream.
+        // Splitting them also had a cost: two velocity drawbacks in different
+        // operations (an Expanded Cargohold's PostMul and a Higgs Anchor's
+        // PostPercent) never met, and a Stabber carrying both read 78.8 m/s
+        // against pyfa's 80.4.
         //
-        // PostDiv stays grouped with PostMul (mathematically identical
-        // operator, just inverted value). PostPercent is its own pool.
+        // PostDiv is stored inverted so it combines as a plain multiplier.
         const postMulEntries: Array<{ value: number; stackingGroup: string | null }> = []
         for (const a of byOp.get('PostMul') ?? []) {
             postMulEntries.push({ value: a.value, stackingGroup: a.stackingGroup })
@@ -124,16 +128,12 @@ export class ModifiedAttribute {
         for (const a of byOp.get('PostDiv') ?? []) {
             postMulEntries.push({ value: 1 / a.value, stackingGroup: a.stackingGroup })
         }
-        if (postMulEntries.length > 0) {
-            value *= combineMultiplicative(postMulEntries)
-        }
-        const postPercentEntries: Array<{ value: number; stackingGroup: string | null }> = []
         for (const a of byOp.get('PostPercent') ?? []) {
             // PostPercent semantic: a value of 0.05 means "+5%" → 1.05 mul.
-            postPercentEntries.push({ value: 1 + a.value, stackingGroup: a.stackingGroup })
+            postMulEntries.push({ value: 1 + a.value, stackingGroup: a.stackingGroup })
         }
-        if (postPercentEntries.length > 0) {
-            value *= combineMultiplicative(postPercentEntries)
+        if (postMulEntries.length > 0) {
+            value *= combineMultiplicative(postMulEntries)
         }
 
         // 5. PostAssign — last one wins. This OVERRIDES everything before it,

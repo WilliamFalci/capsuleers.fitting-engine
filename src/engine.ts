@@ -33,6 +33,7 @@
  * fields are populated until Phase 2/3.
  */
 
+import { defaultModeTypeIDFor } from './fitChecks'
 import { ATTR } from './constants'
 import { FitContext } from './fitContext'
 import {
@@ -167,22 +168,57 @@ export function computeFit(
         const t = dataset.getType(ff.typeID)
         return t ? [makeFighterState(ff, t)] : []
     })
-    const implants = fit.implants.flatMap(fi => {
-        const t = dataset.getType(fi.typeID)
-        return t ? [makeImplantState(fi, t)] : []
-    })
-    const boosters = fit.boosters.flatMap(fb => {
-        const t = dataset.getType(fb.typeID)
-        return t ? [makeBoosterState(fb, t)] : []
-    })
+    // ONE implant per slot, one booster per slot, first one wins — the game's
+    // rule, and pyfa's (`HandledImplantList.append` drops a newcomer whose slot
+    // is taken). The slot is a property of the ITEM (`implantness` /
+    // `boosterness`), not of the caller's bookkeeping, so it is read off the
+    // type. Without this a published fit listing five slot-7 hardwirings — a
+    // wishlist no pilot can actually wear — had all five applied, and a Gnosis
+    // read +6% scan resolution that pyfa doesn't give it.
+    const implants = dropSlotCollisions(
+        fit.implants.flatMap(fi => {
+            const t = dataset.getType(fi.typeID)
+            return t ? [{ slot: t.attributes.find(a => a.id === ATTR_IMPLANTNESS)?.v ?? fi.slot, item: makeImplantState(fi, t) }] : []
+        }),
+    )
+    const boosters = dropSlotCollisions(
+        fit.boosters.flatMap(fb => {
+            const t = dataset.getType(fb.typeID)
+            return t ? [{ slot: t.attributes.find(a => a.id === ATTR_BOOSTERNESS)?.v ?? fb.slot, item: makeBoosterState(fb, t) }] : []
+        }),
+    )
     const subsystems = fit.subsystems.flatMap(fs => {
         const t = dataset.getType(fs.typeID)
         return t ? [makeSubsystemState(fs, t)] : []
     })
+    // A Tactical Destroyer is ALWAYS in one of its modes; a fit that names none
+    // (an EFT import, say) still gets the hull's default — see
+    // defaultModeTypeIDFor. Without it a Svipul read eleven stats differently
+    // from pyfa.
     let mode
-    if (fit.modeTypeID !== undefined) {
-        const t = dataset.getType(fit.modeTypeID)
-        if (t) mode = makeModeState(fit.modeTypeID, t)
+    const modeTypeID = fit.modeTypeID ?? defaultModeTypeIDFor(shipType, dataset)
+    if (modeTypeID !== undefined) {
+        const t = dataset.getType(modeTypeID)
+        if (t) mode = makeModeState(modeTypeID, t)
+    }
+
+    // Drone control range is seeded ON THE SHIP before any effect runs, exactly
+    // as pyfa does (`ship.py`: `"droneControlRange": 20000`). A read-time
+    // fallback isn't equivalent: the first skill ModAdd CREATES the attribute
+    // with base 0, and from then on the fallback never fires — All-V then read
+    // 40 km of skills with the 20 km base silently gone.
+    ship.attr(ATTR.DRONE_CONTROL_RANGE,
+              dataset.attributes.get(ATTR.DRONE_CONTROL_RANGE)?.defaultValue ?? 20_000)
+
+    // Every item needs the attribute schema to honour the SDE's attribute caps
+    // (see ItemState.clampToCaps). Wired here, once, so no construction site has
+    // to remember: an item without it silently stops clamping, which is exactly
+    // the class of bug the caps were added to fix.
+    for (const it of [ship, character, mode, ...modules, ...drones, ...fighters,
+                      ...implants, ...boosters, ...subsystems]) {
+        if (!it) continue
+        it.attrSchema = dataset.attributes
+        if (it.charge) it.charge.attrSchema = dataset.attributes
     }
 
     // ---------- Phase 2: build FitContext ----------
@@ -264,8 +300,14 @@ export function computeFit(
     for (const m of modules) applySourceItem(m, ctx, dataset)
     for (const d of drones) applySourceItem(d, ctx, dataset)
     for (const f of fighters) applySourceItem(f, ctx, dataset)
-    for (const i of implants) applySourceItem(i, ctx, dataset)
-    for (const b of boosters) applySourceItem(b, ctx, dataset)
+    // Character side in TWO passes. Implant sets bonus each other (every member
+    // PreMuls the others' bonus attribute by its own attr 802), so every
+    // implant-to-implant modifier must land before any implant hands its —
+    // by then fully multiplied — bonus to the ship. One pass makes the answer
+    // depend on the order the implants happen to be listed in. See ApplyPass.
+    const charSide = [...implants, ...boosters]
+    for (const it of charSide) applySourceItem(it, ctx, dataset, 'peer')
+    for (const it of charSide) applySourceItem(it, ctx, dataset, 'outgoing')
     if (mode) applySourceItem(mode, ctx, dataset)
 
     // Overheat first so the propmod handler (which reads
@@ -578,6 +620,7 @@ function deriveStats(
     const cap = computeCapacitor(ctx, dataset)
     const tank = computeTank(ctx)
     const offense = computeOffense(ctx, dataset, fit)
+    const sensor = pickSensorStrength(ship)
 
     return {
         fitting: {
@@ -667,8 +710,8 @@ function deriveStats(
             )),
             signatureRadius: ship.getFinal(ATTR.SIGNATURE_RADIUS, 0),
             scanResolution: ship.getFinal(ATTR.SCAN_RESOLUTION, 0),
-            sensorStrength: pickSensorStrength(ship).value,
-            sensorType: pickSensorStrength(ship).type,
+            sensorStrength: sensor.value,
+            sensorType: sensor.type,
         },
         drones: {
             bayUsed: droneBayUsed,
@@ -679,14 +722,12 @@ function deriveStats(
             // ItemState per FitDrone stack, so filtering by state counted five
             // active Ogre IIs as 1 — and this is the number bandwidth gates.
             active: fit.drones.reduce((n, d) => n + d.countActive, 0),
-            // Drone control range is the ship base (default 20 km, attr 458)
-            // PLUS the character's accumulated skill bonus on the same attr.
-            // Drone Avionics V + Advanced Drone Avionics V each ModAdd to
-            // char.attr_458 via effect 504 (`domain: charID`). Pyfa reads
-            // both and sums; ship.attr_458 alone misses 40 km of skills at
-            // All-V → produces 20 km instead of the in-game 60 km.
-            controlRange: ship.getFinal(ATTR.DRONE_CONTROL_RANGE, 20_000)
-                        + ctx.character.getFinal(ATTR.DRONE_CONTROL_RANGE, 0),
+            // ONE accumulator, on the ship (attr 458, SDE default 20 km) — the
+            // charID-domain modifiers that carry the skills and the hull bonus
+            // are re-routed there, see FitContext.targetsForModifier. Summing a
+            // ship half and a character half instead let a percentage bonus
+            // apply to only one of them.
+            controlRange: ship.getFinal(ATTR.DRONE_CONTROL_RANGE, 20_000),
         },
         projected: projectionReports,
         structure: computeStructureMeta(ctx),
@@ -726,19 +767,57 @@ function computeAlignTime(ship: ReturnType<typeof makeShipState>): number {
     return Math.log(4) * mass * agility / 1_000_000
 }
 
+/** Implant slot attribute (`implantness`). */
+const ATTR_IMPLANTNESS = 331
+/** Booster slot attribute (`boosterness`). */
+const ATTR_BOOSTERNESS = 1087
+
+/** Keep the FIRST item in each slot and drop the rest — see the call site. */
+function dropSlotCollisions<T>(entries: Array<{ slot: number; item: T }>): T[] {
+    const taken = new Set<number>()
+    const out: T[] = []
+    for (const e of entries) {
+        if (taken.has(e.slot)) continue
+        taken.add(e.slot)
+        out.push(e.item)
+    }
+    return out
+}
+
+/**
+ * Sensor strength is the STRONGEST of the four sensor types, not the first
+ * non-zero one — pyfa: `max(scan<Type>Strength for the four types)`.
+ *
+ * Taking the first non-zero (radar, then ladar, …) was a real bug, and one no
+ * module-only corpus could expose: modules that add sensor strength add to the
+ * ship's OWN type, so the first non-zero stayed the right answer. Implants do
+ * not. A single Low-grade Grail Alpha, which adds +1 RADAR, took a Rifter's
+ * reading from its native 9.6 ladar down to 1.2 — the implant didn't strengthen
+ * the sensors, it hijacked which one was reported. Any hull whose sensor isn't
+ * radar was affected by any radar-adding implant, and vice versa.
+ *
+ * `type` follows pyfa's `scanType`: same iteration order, and a tie reports
+ * `multispectral` (which is also what a hull with four equal — or four zero —
+ * sensor strengths gets).
+ */
 function pickSensorStrength(ship: ReturnType<typeof makeShipState>): {
     value: number
-    type: 'radar' | 'ladar' | 'magnetometric' | 'gravimetric' | 'unknown'
+    type: 'radar' | 'ladar' | 'magnetometric' | 'gravimetric' | 'multispectral' | 'unknown'
 } {
+    // Order mirrors pyfa's so the tie-break lands on the same type.
     const candidates: Array<{ attr: number; type: 'radar' | 'ladar' | 'magnetometric' | 'gravimetric' }> = [
-        { attr: ATTR.SCAN_RADAR_STRENGTH, type: 'radar' },
-        { attr: ATTR.SCAN_LADAR_STRENGTH, type: 'ladar' },
         { attr: ATTR.SCAN_MAGNETOMETRIC_STRENGTH, type: 'magnetometric' },
+        { attr: ATTR.SCAN_LADAR_STRENGTH, type: 'ladar' },
+        { attr: ATTR.SCAN_RADAR_STRENGTH, type: 'radar' },
         { attr: ATTR.SCAN_GRAVIMETRIC_STRENGTH, type: 'gravimetric' },
     ]
+    let best = -1
+    let type: ReturnType<typeof pickSensorStrength>['type'] = 'unknown'
     for (const c of candidates) {
         const v = ship.getFinal(c.attr, 0)
-        if (v > 0) return { value: v, type: c.type }
+        if (v > best) { best = v; type = c.type }
+        else if (v === best) type = 'multispectral'
     }
-    return { value: 0, type: 'unknown' }
+    if (best <= 0) return { value: Math.max(best, 0), type: best === 0 ? type : 'unknown' }
+    return { value: best, type }
 }
