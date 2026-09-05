@@ -19,6 +19,7 @@ const VOLUME_ATTR_ID   = 161  // volume — not exposed in ATTR enum
 const CAPACITY_ATTR_ID = 38   // capacity / cargo bay
 import { ModifiedAttribute } from './modifiedAttribute'
 import type {
+    SdeAttribute,
     FitBooster,
     FitDrone,
     FitFighter,
@@ -57,6 +58,9 @@ export interface ItemStateInit {
     charge?: ItemState
     /** Per-instance attribute overrides (mutaplasmid). */
     attributeOverrides?: Record<number, number>
+    /** Booster side effects the pilot has switched ON (effect IDs). Every
+     *  other side effect this booster declares stays dormant. */
+    activeSideEffects?: Iterable<number>
 }
 
 export class ItemState {
@@ -70,6 +74,16 @@ export class ItemState {
     charge: ItemState | null
     /** Effect IDs the item carries, populated lazily on first access. */
     readonly effectIDs: ReadonlySet<number>
+    /** Booster side effects switched on for this instance — see
+     *  BOOSTER_SIDE_EFFECT_IDS. Empty for every other item kind. */
+    readonly activeSideEffects: ReadonlySet<number>
+    /**
+     * Attribute schema, needed to honour the SDE's attribute CAPS
+     * (`maxAttributeID` / `minAttributeID`). Assigned by `computeFit` once for
+     * every item in the fit; when absent, `getFinal` simply doesn't clamp — the
+     * behaviour before caps existed.
+     */
+    attrSchema: ReadonlyMap<number, SdeAttribute> | null = null
 
     readonly attrs = new Map<number, ModifiedAttribute>()
 
@@ -82,6 +96,7 @@ export class ItemState {
         this.categoryID = init.type.categoryID
         this.state = init.state ?? 'ONLINE'
         this.charge = init.charge ?? null
+        this.activeSideEffects = new Set(init.activeSideEffects ?? [])
 
         // Populate base attribute map from the typeDogma. attributeOverrides
         // (mutaplasmid) supersede the SDE defaults for the listed IDs.
@@ -140,7 +155,49 @@ export class ItemState {
     getFinal(id: number, fallback = 0): number {
         const ma = this.attrs.get(id)
         if (!ma) return fallback
-        return ma.compute()
+        return this.clampToCaps(id, ma.compute())
+    }
+
+    /**
+     * Clamp a computed value to the ceiling / floor the SDE declares for that
+     * attribute, mirroring pyfa's `__calculateValue` (which applies the same
+     * bounds to forced values AND to normally-calculated ones).
+     *
+     * An attribute may name another attribute as its bound — resonances are
+     * capped by `<layer>MaxDamageResonance` (1.0), `maxVelocity` by
+     * `speedLimit`, the `*Bonus` attributes floored by `ConstantMinusNinetyNine`
+     * — and the bound is read off THIS item, so a hull that raises its own
+     * ceiling is honoured.
+     *
+     * Without it a Polarized weapon, which force-assigns every resonance to
+     * `resistanceKiller` = 100, read as -9900% resistance instead of the 0% the
+     * game shows: the cap is what turns "assign 100" into "resistances removed".
+     * Measured on real published fits — five hulls, forty stats.
+     */
+    private clampToCaps(id: number, value: number): number {
+        const schema = this.attrSchema?.get(id)
+        if (!schema) return value
+        let out = value
+        if (schema.minAttributeID !== undefined) {
+            const floor = this.capValue(schema.minAttributeID)
+            if (floor !== undefined) out = Math.max(out, floor)
+        }
+        if (schema.maxAttributeID !== undefined) {
+            const ceil = this.capValue(schema.maxAttributeID)
+            if (ceil !== undefined) out = Math.min(out, ceil)
+        }
+        return out
+    }
+
+    /** Value of a bounding attribute on this item, falling back to the SDE
+     *  default when the item doesn't carry it (pyfa's `getOriginal(key,
+     *  default)`). Bounds never declare bounds of their own, so this recurses
+     *  exactly one level. */
+    private capValue(capAttrID: number): number | undefined {
+        const ma = this.attrs.get(capAttrID)
+        if (ma) return ma.compute()
+        const def = this.attrSchema?.get(capAttrID)?.defaultValue
+        return def
     }
 
     /** `defaultBase` is the seed base value when the target attribute isn't
@@ -286,7 +343,13 @@ export function makeImplantState(fi: FitImplant, type: SdeType): ItemState {
 }
 
 export function makeBoosterState(fb: FitBooster, type: SdeType): ItemState {
-    return new ItemState({ kind: 'booster', id: fb.id, type, state: 'ONLINE' })
+    // `activeSideEffects` is the pilot's opt-in list. A booster's drawbacks are
+    // OFF until switched on — see BOOSTER_SIDE_EFFECT_IDS in constants.ts for
+    // why that list is hardcoded rather than read from the SDE.
+    return new ItemState({
+        kind: 'booster', id: fb.id, type, state: 'ONLINE',
+        activeSideEffects: fb.activeSideEffects ?? [],
+    })
 }
 
 export function makeSubsystemState(fs: FitSubsystem, type: SdeType): ItemState {

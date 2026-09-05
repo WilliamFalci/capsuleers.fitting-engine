@@ -6,7 +6,10 @@
  * stats (stat-schema), and print every difference. Exit 1 if any difference is
  * found beyond tolerance — so it can drive a /goal verify-and-fix loop.
  *
- *   npm run diff                       # all ships
+ *   npm run diff                       # all ships, generated corpus
+ *   npm run diff -- --source=workbench # real published fits (see fit-sources)
+ *   npm run diff -- --source=implants  # implant sets + boosters
+ *   npm run diff -- --source=all       # every corpus in one run
  *   npm run diff -- --ships=587,29990  # specific ships
  *   npm run diff -- --limit=20         # first N ships
  *   npm run diff -- --group=Loki       # ship group name contains "Loki"
@@ -21,6 +24,7 @@ import { dirname, resolve } from 'node:path'
 import { loadBundledDataset, buildAllVSkillProfile } from '../../dist/node.js'
 import { computeFit, DAMAGE_PROFILE_PRESETS } from '../../dist/index.js'
 import { generateFits } from './fit-generator.mjs'
+import { loadWorkbenchFits, generateImplantFits, generateImplantMatrix } from './fit-sources.mjs'
 import { oursToSchema, flatten, diffStats } from './stat-schema.mjs'
 import { isKnownDiff, knownDiffReason, KNOWN_DIFFS } from './known-diffs.mjs'
 
@@ -28,7 +32,7 @@ const HERE = dirname(fileURLToPath(import.meta.url))
 const PYFA = resolve(HERE, '../../.pyfa')
 
 function parseArgs(argv) {
-    const a = { tol: 0.01, eps: 0.01 }
+    const a = { tol: 0.01, eps: 0.01, source: 'generated' }
     for (const arg of argv) {
         const m = /^--([^=]+)(?:=(.*))?$/.exec(arg); if (!m) continue
         const [, k, v] = m
@@ -40,6 +44,8 @@ function parseArgs(argv) {
         else if (k === 'stats') a.stats = v.split(',')
         else if (k === 'json') a.json = true
         else if (k === 'strict') a.strict = true
+        else if (k === 'source') a.source = v
+        else if (k === 'per-hull') a.perHull = Number(v)
     }
     return a
 }
@@ -55,7 +61,10 @@ function resolveShips(dataset, args) {
 
 const toOurFit = (spec) => ({
     shipTypeID: spec.shipTypeID, name: spec.fitType, visibility: 'PRIVATE', tags: [],
-    modules: spec.modules, fighters: [], cargo: [], implants: [], boosters: [],
+    modules: spec.modules, cargo: [],
+    fighters: (spec.fighters ?? []).map((f, i) => ({ id: `f${i}`, typeID: f.typeID, count: f.count, abilityState: {} })),
+    implants: (spec.implants ?? []).map((im, i) => ({ id: `i${i}`, typeID: im.typeID, slot: im.slot ?? i + 1 })),
+    boosters: (spec.boosters ?? []).map((b, i) => ({ id: `b${i}`, typeID: b.typeID, slot: b.slot ?? i + 1, activeSideEffects: b.activeSideEffects ?? [] })),
     drones: spec.drones.map((d, i) => ({ id: `d${i}`, typeID: d.typeID, countTotal: d.count, countActive: d.active })),
     subsystems: spec.subsystems.map((s, i) => ({ id: `s${i}`, slot: i + 1, typeID: s.typeID })),
     modeTypeID: spec.modeTypeID,
@@ -64,21 +73,41 @@ const toOracleSpec = (spec, id) => ({
     id, shipTypeID: spec.shipTypeID,
     modules: spec.modules.map(m => ({ typeID: m.typeID, state: m.state, chargeTypeID: m.chargeTypeID })),
     drones: spec.drones, subsystems: spec.subsystems, modeTypeID: spec.modeTypeID,
+    fighters: spec.fighters ?? [],
+    implants: (spec.implants ?? []).map(im => ({ typeID: im.typeID })),
+    boosters: (spec.boosters ?? []).map(b => ({ typeID: b.typeID, sideEffects: b.activeSideEffects ?? [] })),
 })
 
-function runOracle(specs) {
+function callOracle(payload) {
     const py = resolve(PYFA, '.venv/bin/python')
     const res = spawnSync(py, [resolve(HERE, '../../oracle/pyfa_oracle.py')], {
         cwd: PYFA,
         env: { ...process.env, PYTHONPATH: `${PYFA}:${resolve(PYFA, '_oracle_stubs')}` },
-        input: JSON.stringify(specs), maxBuffer: 256 * 1024 * 1024, encoding: 'utf8',
+        input: JSON.stringify(payload), maxBuffer: 256 * 1024 * 1024, encoding: 'utf8',
     })
     if (res.status !== 0) {
         console.error('[oracle] failed:', res.stderr?.slice(-2000))
         process.exit(2)
     }
-    const out = JSON.parse(res.stdout)
-    return new Map(out.map(r => [r.id, r]))
+    return JSON.parse(res.stdout)
+}
+
+function runOracle(specs) {
+    return new Map(callOracle(specs).map(r => [r.id, r]))
+}
+
+/**
+ * Which of these typeIDs the pinned pyfa staticdata can supply.
+ *
+ * pyfa's SDE snapshot trails CCP's by weeks, so our freshly-rebuilt bundle
+ * knows items it has never heard of. Asking before building the corpus lets a
+ * source leave them out and DECLARE it, rather than emitting fits that come
+ * back incomparable — a skipped fit and an excluded item cost the same
+ * coverage, but only one of them is legible in the report.
+ */
+function oracleKnownTypes(typeIDs) {
+    const { known } = callOracle({ op: 'known', typeIDs: [...typeIDs] })
+    return new Set(known)
 }
 
 async function main() {
@@ -93,25 +122,89 @@ async function main() {
     // stays at base resonances and contributes nothing) and EHP is comparable.
     const UNIFORM = DAMAGE_PROFILE_PRESETS.find(p => p.name === 'Uniform')
     const ships = resolveShips(dataset, args)
-    console.error(`[diff] ${ships.length} ships × 4 fits, tol=${args.tol}`)
+    const sources = args.source === 'all'
+        ? ['generated', 'workbench', 'implants']
+        : args.source.split(',')
+    console.error(`[diff] ${ships.length} ships, source=${sources.join('+')}, tol=${args.tol}`)
 
-    // Generate + our compute; collect oracle specs.
+    // Build the corpus: every source emits the same engine-agnostic spec, so
+    // both engines are handed identical input and any difference is engine math.
+    const specs = []          // { ship, spec }
+    const corpusNotes = []
+    for (const source of sources) {
+        if (source === 'generated') {
+            for (const ship of ships) {
+                try {
+                    for (const spec of generateFits(dataset, ship, computeFit, ALLV)) specs.push({ ship, spec })
+                } catch (e) { console.error(`[gen] ${ship.name}: ${e.message}`) }
+            }
+        } else if (source === 'workbench') {
+            const shipIds = new Set(ships.map(s => s.id))
+            const { fits, failures, missing } = loadWorkbenchFits(dataset, computeFit, ALLV,
+                { perHull: args.perHull ?? 3 })
+            if (missing) {
+                corpusNotes.push('workbench corpus absent — run `npm run corpus:fetch` (needs EVEWORKBENCH_API_KEY)')
+            }
+            for (const spec of fits) {
+                if (!shipIds.has(spec.shipTypeID)) continue
+                const ship = dataset.typesByBucket.ships.get(spec.shipTypeID)
+                specs.push({ ship, spec })
+            }
+            // A fit we cannot parse is a hole in coverage, not a pass: say so.
+            if (failures.length) {
+                corpusNotes.push(`workbench: ${failures.length} fit(s) unparseable — ${failures.slice(0, 3).map(f => `${f.ship}: ${f.reason}`).join('; ')}${failures.length > 3 ? ', …' : ''}`)
+            }
+            const hulls = new Set(fits.map(f => f.shipTypeID)).size
+            console.error(`[diff]   workbench: ${fits.length} real fits across ${hulls} hulls`)
+        } else if (source === 'implants') {
+            // The FULL matrix once, on the first hull in the run, so every set
+            // and every booster is compared at least once whatever the ship
+            // filter; then a rotating slice per hull for breadth.
+            const [ref, ...rest] = ships
+            const built = []
+            if (ref) for (const spec of generateImplantMatrix(dataset, ref)) built.push({ ship: ref, spec })
+            rest.forEach((ship, i) => {
+                for (const spec of generateImplantFits(dataset, ship, i)) built.push({ ship, spec })
+            })
+            // Drop the fits naming an item the oracle cannot supply, and say how
+            // many and which — those are pyfa staticdata gaps, not engine diffs.
+            const wanted = new Set()
+            for (const { spec } of built) {
+                for (const im of spec.implants ?? []) wanted.add(im.typeID)
+                for (const b of spec.boosters ?? []) wanted.add(b.typeID)
+            }
+            const known = oracleKnownTypes(wanted)
+            const absent = new Set()
+            let kept = 0
+            for (const entry of built) {
+                const ids = [...(entry.spec.implants ?? []).map(i => i.typeID),
+                             ...(entry.spec.boosters ?? []).map(b => b.typeID)]
+                const missing = ids.filter(id => !known.has(id))
+                if (missing.length) { for (const id of missing) absent.add(id) ; continue }
+                specs.push(entry); kept++
+            }
+            if (absent.size) {
+                corpusNotes.push(`implants: ${absent.size} item(s) absent from the pinned pyfa staticdata — excluded (pyfa's SDE trails CCP's; not an engine difference)`)
+            }
+            console.error(`[diff]   implants: full matrix on ${ref?.name ?? '—'} + rotating slice on ${rest.length} hulls → ${kept} comparable fits`)
+        } else {
+            console.error(`[diff] unknown source "${source}"`); process.exit(2)
+        }
+    }
+
+    // Our compute; collect oracle specs.
     const items = []   // { id, ship, fitType, oursFlat }
     const oracleSpecs = []
-    for (const ship of ships) {
-        let fits
-        try { fits = generateFits(dataset, ship, computeFit, ALLV) } catch (e) { console.error(`[gen] ${ship.name}: ${e.message}`); continue }
-        for (const spec of fits) {
-            if (args.only && !args.only.includes(spec.fitType)) continue
-            const id = `${ship.id}:${spec.fitType}`
-            let oursFlat = null
-            try {
-                const c = computeFit(toOurFit(spec), dataset, { skillProfile: ALLV, damageProfile: UNIFORM })
-                oursFlat = flatten(oursToSchema(c.derived))
-            } catch (e) { oursFlat = { __error: e.message } }
-            items.push({ id, ship, fitType: spec.fitType, oursFlat })
-            oracleSpecs.push(toOracleSpec(spec, id))
-        }
+    for (const { ship, spec } of specs) {
+        if (args.only && !args.only.includes(spec.fitType)) continue
+        const id = `${ship.id}:${spec.fitType}`
+        let oursFlat = null
+        try {
+            const c = computeFit(toOurFit(spec), dataset, { skillProfile: ALLV, damageProfile: UNIFORM })
+            oursFlat = flatten(oursToSchema(c.derived))
+        } catch (e) { oursFlat = { __error: e.message } }
+        items.push({ id, ship, fitType: spec.fitType, oursFlat })
+        oracleSpecs.push(toOracleSpec(spec, id))
     }
 
     console.error(`[diff] running oracle on ${oracleSpecs.length} fits...`)
@@ -159,7 +252,7 @@ async function main() {
     const accepted = args.strict ? [] : allDiffs.filter(isKnownDiff)
     const drift = [...driftByType.values()].sort((a, b) => b.fits.length - a.fits.length)
 
-    report(unexpected, { total: items.length, okFits, oracleFail, ourFail, oracleSkipped, accepted, drift }, args)
+    report(unexpected, { total: items.length, okFits, oracleFail, ourFail, oracleSkipped, accepted, drift, corpusNotes }, args)
     // Drift fails the run too: a stale pin silently shrinks coverage, and the
     // report names the fix. It is reported SEPARATELY from stat diffs so a red
     // run is diagnosable at a glance ("bump the pin" vs "the engine moved").
@@ -177,6 +270,11 @@ function typeName(dataset, typeID) {
 
 function report(diffs, summary, args) {
     if (args.json) { console.log(JSON.stringify({ summary, diffs }, null, 2)); return }
+
+    // Coverage caveats (a missing or partly-unparseable corpus). Printed FIRST
+    // and never silently: a shrinking corpus that still says "no differences"
+    // is the one failure this harness must not be able to produce.
+    for (const note of summary.corpusNotes ?? []) console.log(`\n⚠️  ${note}`)
 
     // Types our SDE bundle has but the PINNED pyfa staticdata does not. This is
     // oracle staleness, NOT an engine regression — surfacing it separately is
@@ -233,8 +331,20 @@ function report(diffs, summary, args) {
         console.log(`⚠️  Oracle SDE drift — the pin is stale (see above). Engine parity was NOT assessed on ${summary.oracleSkipped} fit(s).`)
     }
     if (!diffs.length && !drift.length) {
-        console.log(`✅ No unexpected differences — engine matches pyfa across all sampled fits` +
-            `${accepted.length ? ` (${accepted.length} documented pyfa float/modelling/per-ship quirks accepted; run --strict to list them as failures)` : ''}.`)
+        // A green tick on an EMPTY or shrunken corpus is the lie this harness
+        // exists to prevent, so say what was actually compared. `0/0 fits match`
+        // is not a pass.
+        const caveats = summary.corpusNotes ?? []
+        if (summary.total === 0) {
+            console.log(`⚠️  Nothing was compared — 0 fits in the corpus. This is NOT a pass.`)
+        } else if (caveats.length) {
+            console.log(`✅ No unexpected differences across the ${summary.total} fits compared` +
+                `${accepted.length ? ` (${accepted.length} documented quirk${accepted.length === 1 ? '' : 's'} accepted)` : ''}` +
+                ` — but the corpus is INCOMPLETE, see the note${caveats.length === 1 ? '' : 's'} above.`)
+        } else {
+            console.log(`✅ No unexpected differences — engine matches pyfa across all ${summary.total} sampled fits` +
+                `${accepted.length ? ` (${accepted.length} documented pyfa float/modelling/per-ship quirks accepted; run --strict to list them as failures)` : ''}.`)
+        }
     }
 }
 

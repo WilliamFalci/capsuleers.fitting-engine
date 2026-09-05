@@ -17,7 +17,27 @@
  * within the resolved location — see `targetsForModifier()`.
  */
 
-import { CHARGE_GROUP_ATTRS, REQUIRED_SKILL_PAIRS } from './constants'
+import { ATTR, CHARGE_GROUP_ATTRS, REQUIRED_SKILL_PAIRS } from './constants'
+
+/** Skills that mark a charge as a MISSILE for damage-module boosts — pyfa's
+ *  own filter on the Ballistic Control System family (Effect763). */
+const MISSILE_BOOST_SKILLS = [
+    3319,  // Missile Launcher Operation
+    3323,  // Defender Missiles
+] as const
+
+/**
+ * Effects whose recipients pyfa picks by GROUP, though the SDE declares a
+ * required-skill filter. Keep this list short and evidenced: it only exists
+ * where the two disagree, which in practice means the skill-less Civilian
+ * modules. `npm run diff` is what finds the next one.
+ */
+const PYFA_GROUP_FILTERED_EFFECTS: ReadonlyMap<number, ReadonlySet<number>> = new Map([
+    // 3495 shipCapPropulsionJamming — the Interceptor / Interdictor role bonus
+    // to Warp Scrambler + Stasis Web capacitor need. pyfa:
+    // `mod.item.group.name in ('Stasis Web', 'Warp Scrambler')`.
+    [3495, new Set([52, 65])],
+])
 import type { ItemState } from './itemState'
 import type { FittingDataset, SdeModifierInfo, SdeType, SkillProfile } from './types'
 
@@ -188,7 +208,7 @@ export class FitContext {
      * - EffectStopper: handled outside this resolver (stops other effects
      *   rather than applying a modifier).
      */
-    targetsForModifier(modifier: SdeModifierInfo, source: ItemState): ItemState[] {
+    targetsForModifier(modifier: SdeModifierInfo, source: ItemState, effectID?: number): ItemState[] {
         const root = this.resolveDomain(modifier.domain, source)
         switch (modifier.func) {
             case 'ItemModifier':
@@ -208,11 +228,37 @@ export class FitContext {
                 // to the (non-existent) loaded charge dropped the bonus
                 // entirely — e.g. a Drone Link Augmentor added 0 km of drone
                 // control range instead of +20/+24 km.
+                // Drone CONTROL RANGE accumulates on ONE value, and that value
+                // is the ship's. Every SDE modifier for attr 458 is declared
+                // `domain: charID` — the Drone Avionics skills, the Drone Link
+                // Augmentor, the heavy-gunship bonus and the Griffin Navy
+                // Issue's role penalty alike — while pyfa routes them all into
+                // `fit.extraAttributes`, which IS the ship's attribute dict
+                // (seeded to 20 km in `ship.py`). Sending them to the character
+                // instead split the number in two halves that were summed at
+                // the end, so a PERCENTAGE modifier only ever hit one of them:
+                // the Griffin Navy Issue's -50% read as 20 km base + 20 km of
+                // halved skills = 40 km, where the game and pyfa say 30.
+                // Additive bonuses happened to survive the split, which is why
+                // this stayed invisible until a hull applied a percentage.
+                if (modifier.domain === 'charID'
+                    && modifier.modifiedAttributeID === ATTR.DRONE_CONTROL_RANGE) {
+                    return this.ship ? [this.ship] : []
+                }
                 if (modifier.domain === 'charID' && source.kind === 'module'
                     && modifier.modifiedAttributeID === 212) {
+                    // Only charges that are actually MISSILES — pyfa's filter is
+                    // `charge.requiresSkill('Missile Launcher Operation') or
+                    // 'Defender Missiles'` (Effect763). Boosting every loaded
+                    // charge caught the skill-less starter ammo: a fit carrying
+                    // a Civilian Scourge Light Missile read 638.6 alpha where
+                    // pyfa says 629.8, the whole difference being that one
+                    // launcher pyfa does not boost.
                     const out: ItemState[] = []
                     for (const m of this.modules) {
-                        if (m.charge) out.push(m.charge)
+                        if (!m.charge) continue
+                        if (!MISSILE_BOOST_SKILLS.some(sid => itemRequiresSkill(m.charge!, sid))) continue
+                        out.push(m.charge)
                     }
                     return out
                 }
@@ -227,7 +273,18 @@ export class FitContext {
             }
 
             case 'LocationRequiredSkillModifier': {
-                if (!root || modifier.skillTypeID === undefined) return []
+                if (!root) return []
+                // A few pyfa handlers filter their recipients by GROUP where the
+                // SDE declares a required-skill filter. The two pick the same
+                // modules for everything a player actually fits — a Warp
+                // Scrambler requires Propulsion Jamming — and diverge only on
+                // the skill-less Civilian variants. Following the SDE there left
+                // an intercepter's -80% capacitor role bonus off a Civilian Warp
+                // Disruptor, so the module drained 5 GJ/s instead of 1 and the
+                // hull emptied in 45 s against pyfa's 90.
+                const groups = effectID === undefined ? undefined : PYFA_GROUP_FILTERED_EFFECTS.get(effectID)
+                if (groups) return this.itemsInLocation(root).filter(it => groups.has(it.groupID))
+                if (modifier.skillTypeID === undefined) return []
                 const sid = modifier.skillTypeID
                 // DIRECT skill match (Pyfa-parity). DO NOT use transitive
                 // closure — Pyfa's `requiresSkill` matches only the item's

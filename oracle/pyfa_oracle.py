@@ -14,8 +14,20 @@ Fit-spec shape:
   { "id": "...", "shipTypeID": 587,
     "modules":   [ {"typeID":..,"state":"ACTIVE","chargeTypeID":..?} ],
     "drones":    [ {"typeID":..,"count":N,"active":N} ],
+    "fighters":  [ {"typeID":..,"count":N,"active":true} ],
+    "implants":  [ {"typeID":..} ],
+    "boosters":  [ {"typeID":..,"sideEffects":[effectID,..]} ],
     "subsystems":[ {"typeID":..} ],
     "modeTypeID": ..? }
+
+Implants live on the FIT, never on the character: `Fit.appliedImplants` returns
+`character.implants` when `implantLocation == CHARACTER`, and the All-V character
+carries none — so a fit's implants would silently vanish. It is set explicitly
+rather than relied upon (a fresh in-memory Fit leaves the column unset).
+
+Booster SIDE EFFECTS default to inactive in pyfa (`BoosterSideEffect.active =
+False`) and our engine models the same opt-in list, so the spec carries the
+effectIDs to switch on and both sides start from "none".
 """
 import sys
 sys._called_from_test = True  # eos -> in-memory saveddata + auto-created schema
@@ -27,8 +39,11 @@ from eos.saveddata.fit import Fit
 from eos.saveddata.ship import Ship
 from eos.saveddata.module import Module
 from eos.saveddata.drone import Drone
+from eos.saveddata.fighter import Fighter
+from eos.saveddata.implant import Implant
+from eos.saveddata.booster import Booster
 from eos.saveddata.character import Character
-from eos.const import FittingModuleState
+from eos.const import FittingModuleState, ImplantLocation
 try:
     from eos.saveddata.damagePattern import DamagePattern
 except Exception:
@@ -78,6 +93,10 @@ def build_fit(spec):
     fit = Fit()
     fit.ship = Ship(_item(spec["shipTypeID"]))
     fit.character = _CHAR
+    # Implants must be read off the FIT. `appliedImplants` returns
+    # character.implants when implantLocation == CHARACTER, and the All-V
+    # character has none — the fit's implants would silently do nothing.
+    fit.implantLocation = ImplantLocation.FIT
     if _UNIFORM is not None:
         fit.damagePattern = _UNIFORM
 
@@ -142,6 +161,55 @@ def build_fit(spec):
             dr.amountActive = int(d.get("active", d.get("count", 0)))
             fit.drones.append(dr)
             dr.owner = fit
+        except Exception:
+            pass
+
+    for f in spec.get("fighters", []):
+        if not _known(f["typeID"]):
+            _miss(f["typeID"], "fighter")
+            continue
+        try:
+            fg = Fighter(_item(f["typeID"]))
+            # `_amount = -1` means "max squadron size", which is what a fitted
+            # squadron is; only override when the spec asks for fewer.
+            if f.get("count"):
+                fg.amount = int(f["count"])
+            fg.active = bool(f.get("active", True))
+            fit.fighters.append(fg)
+            fg.owner = fit
+        except Exception:
+            pass
+
+    # HandledImplantList.append REMOVES an implant whose slot is already taken
+    # (one implant per slot, like the game). Feeding it a slot-colliding set
+    # would leave the two engines fitting different implants, so the generator
+    # emits one per slot and this only mirrors pyfa's own rule.
+    for im in spec.get("implants", []):
+        if not _known(im["typeID"]):
+            _miss(im["typeID"], "implant")
+            continue
+        try:
+            it = Implant(_item(im["typeID"]))
+            fit.implants.append(it)
+        except Exception:
+            pass
+
+    for b in spec.get("boosters", []):
+        if not _known(b["typeID"]):
+            _miss(b["typeID"], "booster")
+            continue
+        try:
+            bo = Booster(_item(b["typeID"]))
+            fit.boosters.append(bo)
+        except Exception:
+            continue
+        # Side effects are opt-in on BOTH sides (pyfa defaults them off). Set
+        # them explicitly rather than trusting the default, so a spec that asks
+        # for one gets it and a spec that doesn't provably gets none.
+        wanted = set(int(e) for e in (b.get("sideEffects") or []))
+        try:
+            for se in bo.sideEffects:
+                se.active = se.effectID in wanted
         except Exception:
             pass
 
@@ -223,7 +291,20 @@ def stats(fit):
 def main():
     global _CHAR
     _CHAR = Character.getAll5()
-    specs = json.load(sys.stdin)
+    payload = json.load(sys.stdin)
+
+    # PREFLIGHT: `{"op": "known", "typeIDs": [...]}` answers which of those types
+    # the pinned staticdata can actually supply. pyfa's own SDE snapshot trails
+    # CCP's by weeks, so a corpus built from OUR bundle can name items this
+    # oracle has never heard of (66 event/expired boosters, at the time of
+    # writing). Asking FIRST lets the caller leave them out and say so, instead
+    # of building fits that come back incomparable — the same reason the
+    # `dropped` reporting exists, moved one step earlier.
+    if isinstance(payload, dict) and payload.get("op") == "known":
+        json.dump({"known": [t for t in payload.get("typeIDs", []) if _known(t)]}, sys.stdout)
+        return
+
+    specs = payload
     out = []
     for spec in specs:
         rec = {"id": spec.get("id")}

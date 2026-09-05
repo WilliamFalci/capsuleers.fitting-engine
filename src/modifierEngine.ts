@@ -24,7 +24,8 @@
  * additive without penalty).
  */
 
-import { OPERATION_BY_SDE_CODE } from './constants'
+import { BOOSTER_SIDE_EFFECT_IDS, OPERATION_BY_SDE_CODE } from './constants'
+import { stackPenaltyGroup, type PenaltyReceiver } from './stackingPenalised'
 import { STACKING_PENALTY_GROUPS } from './stackingGroups'
 import type { ItemState } from './itemState'
 import type { FitContext } from './fitContext'
@@ -37,9 +38,38 @@ import type {
     SdeModifierInfo,
 } from './types'
 
-/** Source kinds whose modifiers do NOT incur a stacking penalty. */
+/**
+ * Source kinds whose modifiers do NOT incur a stacking penalty, WHATEVER the
+ * effect says.
+ *
+ * This is exactly pyfa's context rule and nothing more. SHIP, MODE and
+ * SUBSYSTEM sources used to sit here too, and that was too broad: pyfa
+ * penalises plenty of hull bonuses, and the per-(effect, attribute) registry
+ * now answers for them. The Claw's `+5% projectile rate of fire per level`
+ * (Effect4464, `stackingPenalties=True`) is the measurable case — exempting it
+ * left the hull bonus out of the chain, so a Gyrostabilizer took the unpenalised
+ * first slot instead of the second and the fit read 154.4 weapon DPS against
+ * pyfa's 152.1.
+ *
+ * Implants and boosters belong here, and their absence was a real error: a
+ * six-piece Low-grade Snake set read 486.5 m/s on a Rifter where pyfa says
+ * 503.96, because our generic path penalised the six velocity bonuses against
+ * each other. Pyfa is unambiguous and consistent about it — of the 243 effects
+ * its handlers document as used by implants, the 19 that penalise at all guard
+ * it the SAME way:
+ *
+ *     penalized = False if 'skill' in context or 'implant' in context
+ *                          or 'booster' in context else True
+ *
+ * i.e. the penalty is a property of the SOURCE, not the effect: the very same
+ * effect (394 `navigationVelocityBonusPostPercentMaxVelocityShip`) is penalised
+ * when a rig casts it and unpenalised when a Snake does. The lone handler that
+ * hardcodes `stackingPenalties=True` next to a parameter named `implant`
+ * (Effect2868) is used by "Auxiliary Nano Pump" rigs only — a stale parameter
+ * name, not a counter-example.
+ */
 const NO_PENALTY_KINDS: ReadonlySet<ItemState['kind']> = new Set([
-    'skill', 'ship', 'mode', 'subsystem', 'character',
+    'skill', 'character', 'implant', 'booster',
 ] as Array<ItemState['kind']>)
 
 /**
@@ -99,10 +129,37 @@ function scaleForPipeline(
  * state contribute). EffectStopper modifiers are NOT applied here — see
  * `collectEffectStoppers()` for that.
  */
+/**
+ * Which half of a two-pass application this call is doing.
+ *
+ * `all` (default) is the single-pass behaviour every phase but one uses.
+ *
+ * The exception is the character side. An implant SET is a mutual bonus: every
+ * member carries a `setBonus*` effect that PreMuls the OTHER members' bonus
+ * attribute by its own attr 802, itself included. Applied in one pass the
+ * result depends on the order the implants happen to sit in — a Low-grade Snake
+ * set read 468.9 m/s listed alpha-first and 483.2 m/s listed omega-first, where
+ * pyfa (whose attributes resolve lazily, so order cannot matter) says 503.96.
+ * So the char side runs `peer` first — every modifier that lands on another
+ * implant or booster — and only then `outgoing`, by which point each implant's
+ * bonus attribute already carries the whole set multiplier.
+ */
+export type ApplyPass = 'all' | 'peer' | 'outgoing'
+
+/** True when a modifier's targets include an implant or a booster, i.e. it is
+ *  a character-side peer bonus rather than something aimed at the ship. */
+function isPeerModifier(source: ItemState, mi: SdeModifierInfo, ctx: FitContext, effectID: number): boolean {
+    for (const t of ctx.targetsForModifier(mi, source, effectID)) {
+        if (t.kind === 'implant' || t.kind === 'booster') return true
+    }
+    return false
+}
+
 export function applySourceItem(
     source: ItemState,
     ctx: FitContext,
     dataset: FittingDataset,
+    pass: ApplyPass = 'all',
 ): void {
     const isLocalModule = source.kind === 'module'
     // Two-phase application: a source's SELF modifiers (domain itemID — the item
@@ -134,10 +191,20 @@ export function applySourceItem(
         // doesn't fire. Other local items (drones, fighters, implants)
         // are out of scope for ship-mounted prop modules.
         if (isLocalModule && ctx.stoppedLocalEffectIDs.has(eid)) continue
+        // A booster's DRAWBACKS are opt-in and default to off (pyfa:
+        // `BoosterSideEffect.active = False`). Applying them unconditionally
+        // penalises a pilot who never rolled them — a Strong Blue Pill was
+        // costing a Rifter 22% of its shield HP and a fifth of its capacitor.
+        if (source.kind === 'booster' && BOOSTER_SIDE_EFFECT_IDS.has(eid)
+            && !source.activeSideEffects.has(eid)) continue
         const effect = dataset.effects.get(eid)
         if (!effect) continue
         if (!source.appliesAtState(effect)) continue
         for (const mi of effect.modifierInfo) {
+            if (pass !== 'all') {
+                const peer = isPeerModifier(source, mi, ctx, effect.id)
+                if (pass === 'peer' ? !peer : peer) continue
+            }
             (mi.domain === 'itemID' ? selfMods : outMods).push({ effect, mi })
         }
     }
@@ -244,7 +311,7 @@ export function applyLegacyFighterProjection(
                 sourceID: fighter.id,
                 operation: 'PostPercent',
                 value: pen / 100,
-                stackingGroup: `attr:${ATTR_MAX_VEL}`,
+                stackingGroup: `default:${ATTR_MAX_VEL}`,
             })
         }
     }
@@ -291,10 +358,9 @@ export function applyOneModifier(
     const computed = computeModifierValue(source, mi, ctx, dataset, op)
     if (computed === null) return
 
-    const targets = ctx.targetsForModifier(mi, source)
+    const targets = ctx.targetsForModifier(mi, source, effect.id)
     if (targets.length === 0) return
 
-    const stackingGroup = computeStackingGroup(source, mi, dataset, effect)
 
     // Multiplicative ops carry a literal multiplier in the SDE
     // (e.g. attr 565 = 0.5 + PostMul → "× 0.5"). The only exception is
@@ -319,13 +385,17 @@ export function applyOneModifier(
         ? (dataset.attributes.get(mi.modifiedAttributeID)?.defaultValue ?? 0)
         : 0
 
+    // The stacking group is decided PER TARGET: pyfa penalises a call, and the
+    // same effect can penalise an attribute on one receiver and not on another
+    // (the Siege Module slows the ship unpenalised while penalising a torpedo's
+    // velocity). See computeStackingGroup.
     for (const target of targets) {
         const affliction: ModifierAffliction = {
             sourceKind: mapSourceKind(source.kind),
             sourceID: source.id,
             operation: op,
             value,
-            stackingGroup,
+            stackingGroup: computeStackingGroup(source, mi, dataset, effect, target, ctx),
             resistanceAttributeID: effect.resistanceAttributeID,
         }
         target.addAffliction(mi.modifiedAttributeID, affliction, sdeDefault)
@@ -649,7 +719,17 @@ const SHIP_BONUS_SCALING_SKILL: ReadonlyMap<number, number> = new Map([
     // Notable: Exhumer/Barge shield+armor resist role bonuses (Hulk/Skiff/
     // Mackinaw shield resist 4 %→20 %), Bhaalgorn drone+laser (492), industrial
     // command (Orca/Rorqual), Marauder/pirate/expedition hull bonuses.
-    [66, 89611], [310, 3432], [349, 19760], [492, 3339], [1296, 21610],
+    // NB: attr 310 (`cpuNeedBonus`) is deliberately ABSENT. The auto-derivation
+    // proposed it because the Weapon Upgrades SKILL scales its own attr 310 per
+    // level (pyfa Effect3519 — a skill source, handled by the skill path), but
+    // no SHIP-side effect does: pyfa's Effect5901 (`roleBonusBulkheadCPU`,
+    // freighters + jump freighters) takes `ship.getModifiedItemAttr('cpuNeedBonus')`
+    // verbatim, and every one of the 18 hulls carrying the attribute holds a
+    // FULL-value role bonus (-99 % / -100 %), never a per-level one. Scaling it
+    // by Electronics Upgrades V turned an Obelisk's -100 % bulkhead CPU into
+    // -500 %, so three Reinforced Bulkheads reported -480 tf of CPU used
+    // instead of 0. Caught on real published freighter fits.
+    [66, 89611], [349, 19760], [492, 3339], [1296, 21610],
     [1669, 3184], [1670, 3184], [1842, 32918], [3167, 33856],
     [3181, 17940], [3182, 17940], [3183, 17940], [3184, 17940], [3185, 17940],
     [3187, 17940], [3188, 17940], [3190, 33856], [3191, 33856], [3192, 33856],
@@ -858,6 +938,20 @@ function computeModifierValue(
             return { value: baseValue, scaled: false }
         }
 
+        // IMPLANT / BOOSTER sources are never per-level either. Pyfa opens every
+        // one of these handlers with
+        //     level = container.level if 'skill' in context else 1
+        // so only an actual SKILL multiplies by its level; an implant carrying
+        // the same effect contributes its value once, and the `skillTypeID` is
+        // there to pick which modules receive it. Scaling it multiplied the
+        // bonus fivefold at All-V: a 'Gnome' Weapon Upgrades WU-1003 cut a
+        // Stormbringer's CPU by 25 tf instead of 5, and a 'Squire' Energy Grid
+        // Upgrades by 1.57 instead of 0.32. Found on real published fits once
+        // the EFT importer stopped dropping their implants.
+        if (source.kind === 'implant' || source.kind === 'booster') {
+            return { value: baseValue, scaled: false }
+        }
+
         // KEY EVE/Pyfa SEMANTIC:
         //   - When skillTypeID is one of the SOURCE'S OWN required skills,
         //     the modifier scales NOT by skill level but is FLAT — the
@@ -954,48 +1048,82 @@ const SHIP_ROLE_BONUS_ATTRS: ReadonlySet<number> = new Set([
  * string means "this modifier shares a penalty stack with all other
  * modifiers using the same string key on the same attribute".
  */
+/** Classify a modifier's target the way the generated registry names receivers. */
+function penaltyReceiver(target: ItemState, source: ItemState, ctx: FitContext): PenaltyReceiver {
+    if (target === ctx.ship) return 'ship'
+    if (target === source) return 'self'
+    switch (target.kind) {
+        case 'charge':    return 'charge'
+        case 'drone':     return 'drone'
+        case 'fighter':   return 'fighter'
+        case 'character': return 'character'
+        case 'module':
+        case 'subsystem': return 'module'
+        default:          return 'self'
+    }
+}
+
+/**
+ * Legacy handlers build their stacking key by hand and MUST use the same group
+ * name the generic path emits — pyfa's group, `default` unless a handler names
+ * its own. They used to spell it `attr:<id>`, which stopped meeting the generic
+ * chain the moment the group became part of the key, silently splitting bonuses
+ * that belong together (11 fixture assertions caught it).
+ */
 function computeStackingGroup(
     source: ItemState,
     mi: SdeModifierInfo,
     dataset: FittingDataset,
     effect: SdeEffect,
+    target: ItemState,
+    ctx: FitContext,
 ): string | null {
-    // 1. Source-kind exemptions: skills + ship + mode + subsystem + char never
-    //    impose a stacking penalty (role/skill bonuses apply in full).
+    // 1. Source-kind exemptions: skills + ship + mode + subsystem + char +
+    //    implants + boosters never impose a stacking penalty. This is pyfa's
+    //    `penalized = False if 'skill'/'implant'/'booster' in context` rule,
+    //    generalised to the intrinsic sources.
     if (NO_PENALTY_KINDS.has(source.kind)) return null
 
-    // 2. Attribute schema exemption: attributes flagged `stackable=true` in
-    //    the SDE bypass the penalty (e.g. raw HP additions).
-    if (mi.modifiedAttributeID !== undefined) {
-        const attr = dataset.attributes.get(mi.modifiedAttributeID)
-        if (attr?.stackable) return null
-    }
+    // 2. Does pyfa penalise THIS effect on THIS attribute for THIS target?
+    //    The registry is generated from pyfa's handlers (stackingPenalised.ts):
+    //    only 403 of its 2 799 attribute-boosting calls penalise, so the old
+    //    default — penalise everything sharing an attribute — chained bonuses
+    //    pyfa keeps independent. There is no `stackable`-attribute exemption in
+    //    pyfa and none here: the call decides, not the attribute schema.
+    // Chains are keyed by (attribute, pyfa penaltyGroup). An effect that names
+    // its own group forms an INDEPENDENT chain: the T3D Defense Mode's resist
+    // bonus uses 'postDiv' and therefore never competes with a hardener's
+    // 'default' chain — honouring the flag but not the group cost a Svipul
+    // 3.6 % of its EHP.
+    const group = stackPenaltyGroup(
+        effect.id, mi.modifiedAttributeID, penaltyReceiver(target, source, ctx), source.kind)
+    if (group === null) return null
+    if (!HONOURED_PENALTY_GROUPS.has(group)) return `default:${mi.modifiedAttributeID}`
 
-    // 3. Per-EFFECT penalty group (Pyfa-faithful, applied conservatively).
-    //    Pyfa scopes the stacking penalty by a `penaltyGroup`: most module
-    //    bonuses share the `default` group (penalised together per attribute —
-    //    our long-standing behaviour), but a handful of effects use a CUSTOM
-    //    group so they form their OWN independent chain. The canonical case is
-    //    a cloak's scanResolution multiplier (`cloakingScanResolutionMultiplier`):
-    //    it must NOT penalise against a Warp Core Stabilizer's scanResolution
-    //    multiplier (default group), so the two apply in full (matching pyfa).
-    //    We honour only the custom (non-`default`) groups here and leave every
-    //    `default`/untable effect on the existing `attr:<id>` chain, so this
-    //    can't regress the broad behaviour validated by the parity suite.
-    const group = STACKING_PENALTY_GROUPS.get(effect.id)
-    if (group !== undefined && group !== 'default' && CUSTOM_STACK_GROUPS_HONOURED.has(group)) {
-        return `${group}:${mi.modifiedAttributeID}`
-    }
-    return `attr:${mi.modifiedAttributeID}`
+    return `${group}:${mi.modifiedAttributeID}`
 }
 
-/** Custom pyfa penaltyGroups we honour as INDEPENDENT chains. Kept to the set
- *  empirically verified not to regress the parity suite — the operation-named
- *  groups (postMul/postDiv/preMul/…) are NOT honoured because pyfa's real chain
- *  separation for those interacts with legacy-handled effects in ways our
- *  generic path doesn't reproduce 1:1. The cloak's scanResolution group is the
- *  clear, safe case: it must not penalise against a Warp Core Stabilizer. */
-const CUSTOM_STACK_GROUPS_HONOURED: ReadonlySet<string> = new Set([
+/**
+ * pyfa penaltyGroups honoured as INDEPENDENT chains.
+ *
+ * pyfa keys a penalised chain by (attribute, penaltyGroup), so an effect that
+ * names its own group never competes with the `default` one — that is what
+ * keeps a T3D Defense Mode's resist bonus (`postDiv`) off a hardener's chain,
+ * worth 3.6 % of a Svipul's EHP, and a cloak's scan-resolution multiplier off a
+ * Warp Core Stabilizer's.
+ *
+ * `preMul` is deliberately EXCLUDED, and the exclusion is measured, not
+ * cautious: honouring it fails 8 assertions of the fixture suite (armour EHP
+ * reads 1.1–2.6 % high on Babaroga, Legion, Avatar and Zirnitra), while every
+ * other group is 662/0. The group carries Damage Control (2302), the Reactive
+ * Armor Hardener (4928) and the Bastion module (6658) — all three of which this
+ * engine also touches through dedicated handlers that write the `default`
+ * chain, so splitting the generic half of the same bonus leaves the hardeners
+ * with one competitor too few. Reproduce with the whole set before changing it;
+ * the honest fix is to make those handlers agree on a group, not to widen this.
+ */
+const HONOURED_PENALTY_GROUPS: ReadonlySet<string> = new Set([
+    'postMul', 'postDiv', 'postPerc', 'postPercent',
     'cloakingScanResolutionMultiplier',
 ])
 
@@ -1120,7 +1248,7 @@ export function applySkills(
                 // experiment trail.
                 const value = isMul ? (1 + baseVal * level) : (baseVal * level)
                 const stackingGroup =
-                    NO_PENALTY_KINDS.has('character') ? null : `attr:${mi.modifiedAttributeID}`
+                    NO_PENALTY_KINDS.has('character') ? null : `default:${mi.modifiedAttributeID}`
 
                 const targets = resolveSkillTargets(mi, ctx)
                 if (targets.length === 0) continue
@@ -1427,7 +1555,7 @@ export function applyLegacyPropMods(ctx: FitContext): void {
                 sourceID: mod.id,
                 operation: 'PostPercent',
                 value: sigBonus / 100,
-                stackingGroup: `attr:${ATTR_SIGNATURE_RADIUS}`,
+                stackingGroup: `default:${ATTR_SIGNATURE_RADIUS}`,
             })
         }
     }
@@ -1448,17 +1576,25 @@ const ENTOSIS_LINK_EFFECT_ID = 6063
 
 export function applyLegacyEntosisLink(ctx: FitContext): void {
     for (const mod of ctx.modules) {
-        if (mod.state === 'OFFLINE') continue
+        // pyfa declares effect 6063 `type = 'active'`: the sensor bonus is part
+        // of RUNNING the link, not of having it online. Accepting ONLINE too
+        // handed a Sigil +100% sensor strength (9.6 against pyfa's 4.8) on a
+        // real published fit whose link is merely fitted.
+        if (mod.state !== 'ACTIVE' && mod.state !== 'OVERLOAD') continue
         if (!mod.effectIDs.has(ENTOSIS_LINK_EFFECT_ID)) continue
 
-        // Source attrs verified against Entosis Link I (typeID 34593):
-        //   1027 → radar / 1028 → ladar / 1029 → magnetometric / 1030 → gravimetric
-        // Stored as raw percent (100 = +100%).
+        // Source attrs, from the SDE's own names (they do NOT run in the same
+        // order as the ship-side scan attrs, and the first version paired them
+        // positionally — radar and gravimetric came out swapped):
+        //   1027 scanGravimetricStrengthPercent / 1028 scanLadarStrengthPercent
+        //   1029 scanMagnetometricStrengthPercent / 1030 scanRadarStrengthPercent
+        // Stored as raw percent (100 = +100%). Every Entosis Link carries 100 on
+        // all four, so the swap was invisible — until one of them differs.
         const sensorPairs: ReadonlyArray<readonly [number, number]> = [
-            [1027, ATTR_SCAN_RADAR],
+            [1027, ATTR_SCAN_GRAVIMETRIC],
             [1028, ATTR_SCAN_LADAR],
             [1029, ATTR_SCAN_MAGNETOMETRIC],
-            [1030, ATTR_SCAN_GRAVIMETRIC],
+            [1030, ATTR_SCAN_RADAR],
         ]
         for (const [srcAttr, tgtAttr] of sensorPairs) {
             const bonusPct = mod.getBase(srcAttr) ?? 0
@@ -1498,7 +1634,7 @@ export function applyLegacyCapitalEhe(ctx: FitContext): void {
                 sourceID: mod.id,
                 operation: 'PostMul',
                 value: factor,
-                stackingGroup: `attr:${tgtAttr}`,
+                stackingGroup: `default:${tgtAttr}`,
             })
         }
     }
@@ -1599,12 +1735,21 @@ export function applyLegacyMjdSigBloom(ctx: FitContext): void {
         if (!isMjd) continue
         const bonusPct = mod.getFinal(ATTR_SIGNATURE_RADIUS_BONUS_PERCENT, 0)
         if (bonusPct === 0) continue
+        // The three MJD-family effects do NOT agree on penalisation, and
+        // treating them alike was wrong: the plain Micro Jump Drive (4921) is
+        // unpenalised in pyfa, while the Micro Jump Field Generators (6208,
+        // 12126) are. Sharing the MWD's bucket therefore under-bloomed any fit
+        // carrying both a Microwarpdrive and an MJD — a Rokh read 6 335 m
+        // against pyfa's 6 875 (5.5 × 2.5, multiplied straight through).
+        const penalised = [...LEGACY_MJD_EFFECT_IDS]
+            .some(eid => mod.effectIDs.has(eid)
+                && stackPenaltyGroup(eid, ATTR_SIGNATURE_RADIUS, 'ship', 'module') !== null)
         ctx.ship.addAffliction(ATTR_SIGNATURE_RADIUS, {
             sourceKind: 'module',
             sourceID: mod.id,
             operation: 'PostPercent',
             value: bonusPct / 100,
-            stackingGroup: `attr:${ATTR_SIGNATURE_RADIUS}`,  // stack-penalised with MWD bloom
+            stackingGroup: penalised ? `default:${ATTR_SIGNATURE_RADIUS}` : null,
         })
     }
 }
@@ -2190,7 +2335,7 @@ export function applyLegacyBastion(ctx: FitContext): void {
                 sourceID,
                 operation: 'PreMul',
                 value: factor,
-                stackingGroup: HULL_RES_ATTRS.has(tgt) ? null : `attr:${tgt}`,
+                stackingGroup: HULL_RES_ATTRS.has(tgt) ? null : `default:${tgt}`,
             })
         }
 
@@ -2211,17 +2356,17 @@ export function applyLegacyBastion(ctx: FitContext): void {
             if (matchTurret(target)) {
                 if (maxRangeBonus !== 0) target.addAffliction(ATTR_MAX_RANGE, {
                     sourceKind: 'module', sourceID, operation: 'PostPercent',
-                    value: maxRangeBonus / 100, stackingGroup: `attr:${ATTR_MAX_RANGE}`,
+                    value: maxRangeBonus / 100, stackingGroup: `default:${ATTR_MAX_RANGE}`,
                 })
                 if (turretRofBonus !== 0) target.addAffliction(ATTR_SPEED, {
                     sourceKind: 'module', sourceID, operation: 'PostPercent',
-                    value: turretRofBonus / 100, stackingGroup: `attr:${ATTR_SPEED}`,
+                    value: turretRofBonus / 100, stackingGroup: `default:${ATTR_SPEED}`,
                 })
             }
             if (matchTurretFalloff(target) && falloffBonusV !== 0) {
                 target.addAffliction(ATTR_FALLOFF, {
                     sourceKind: 'module', sourceID, operation: 'PostPercent',
-                    value: falloffBonusV / 100, stackingGroup: `attr:${ATTR_FALLOFF}`,
+                    value: falloffBonusV / 100, stackingGroup: `default:${ATTR_FALLOFF}`,
                 })
             }
         }
@@ -2242,13 +2387,13 @@ export function applyLegacyBastion(ctx: FitContext): void {
             if (target.charge && matchMissileCharge(target.charge) && missileVelocityBonus !== 0) {
                 target.charge.addAffliction(ATTR_MAX_VELOCITY, {
                     sourceKind: 'module', sourceID, operation: 'PostPercent',
-                    value: missileVelocityBonus / 100, stackingGroup: `attr:${ATTR_MAX_VELOCITY}`,
+                    value: missileVelocityBonus / 100, stackingGroup: `default:${ATTR_MAX_VELOCITY}`,
                 })
             }
             if (matchMissileLauncherROF(target) && missileRofBonus !== 0) {
                 target.addAffliction(ATTR_SPEED, {
                     sourceKind: 'module', sourceID, operation: 'PostPercent',
-                    value: missileRofBonus / 100, stackingGroup: `attr:${ATTR_SPEED}`,
+                    value: missileRofBonus / 100, stackingGroup: `default:${ATTR_SPEED}`,
                 })
             }
         }
@@ -2273,13 +2418,13 @@ export function applyLegacyBastion(ctx: FitContext): void {
             if (isArmor && armorRepBonus !== 0) {
                 target.addAffliction(ATTR_ARMOR_REP_AMOUNT, {
                     sourceKind: 'module', sourceID, operation: 'PostPercent',
-                    value: armorRepBonus / 100, stackingGroup: `attr:${ATTR_ARMOR_REP_AMOUNT}`,
+                    value: armorRepBonus / 100, stackingGroup: `default:${ATTR_ARMOR_REP_AMOUNT}`,
                 })
             }
             if (isShield && shieldBoostBonus !== 0) {
                 target.addAffliction(ATTR_SHIELD_REP_AMOUNT, {
                     sourceKind: 'module', sourceID, operation: 'PostPercent',
-                    value: shieldBoostBonus / 100, stackingGroup: `attr:${ATTR_SHIELD_REP_AMOUNT}`,
+                    value: shieldBoostBonus / 100, stackingGroup: `default:${ATTR_SHIELD_REP_AMOUNT}`,
                 })
             }
             if ((isArmor || isShield) && repairDurationBonus !== 0) {
@@ -2315,7 +2460,7 @@ export function applyLegacyBastion(ctx: FitContext): void {
             if (v === 0) continue
             ship.addAffliction(tgt, {
                 sourceKind: 'module', sourceID, operation: 'PostPercent',
-                value: v / 100, stackingGroup: `attr:${tgt}`,
+                value: v / 100, stackingGroup: `default:${tgt}`,
             })
         }
 
@@ -2433,7 +2578,7 @@ export function applyLegacyDoomsdaySelfEffects(ctx: FitContext): void {
                 sourceID: mod.id,
                 operation: 'PostPercent',
                 value: speedFactor / 100,
-                stackingGroup: `attr:${ATTR_MAX_VELOCITY}`,
+                stackingGroup: `default:${ATTR_MAX_VELOCITY}`,
             })
         }
         const siegeStatus = mod.getFinal(ATTR_SIEGE_WARP_STATUS, 0)
@@ -2562,7 +2707,7 @@ function applyCommandBuff(
         sourceID: sourceMod.id,
         operation,
         value: scaledValue,
-        stackingGroup: `attr:${attrID}`,
+        stackingGroup: `default:${attrID}`,
     })
 
     // Item modifiers — apply to the ship.
@@ -3024,7 +3169,7 @@ export function applyLegacyFighterAbilities(ctx: FitContext): void {
                     sourceID: fighter.id,
                     operation: 'PostPercent',
                     value: speedPct / 100,
-                    stackingGroup: `attr:${ATTR_MAX_VELOCITY}`,
+                    stackingGroup: `default:${ATTR_MAX_VELOCITY}`,
                 })
             }
         }
@@ -3038,7 +3183,7 @@ export function applyLegacyFighterAbilities(ctx: FitContext): void {
                     sourceID: fighter.id,
                     operation: 'PostPercent',
                     value: speedPct / 100,
-                    stackingGroup: `attr:${ATTR_MAX_VELOCITY}`,
+                    stackingGroup: `default:${ATTR_MAX_VELOCITY}`,
                 })
             }
             const sigPct = fighter.getFinal(ATTR_FIGHTER_MWD_SIG_BONUS, 0)
@@ -3048,7 +3193,7 @@ export function applyLegacyFighterAbilities(ctx: FitContext): void {
                     sourceID: fighter.id,
                     operation: 'PostPercent',
                     value: sigPct / 100,
-                    stackingGroup: `attr:${ATTR_SIGNATURE_RADIUS}`,
+                    stackingGroup: `default:${ATTR_SIGNATURE_RADIUS}`,
                 })
             }
         }
@@ -3062,7 +3207,7 @@ export function applyLegacyFighterAbilities(ctx: FitContext): void {
                     sourceID: fighter.id,
                     operation: 'PostPercent',
                     value: speedPct / 100,
-                    stackingGroup: `attr:${ATTR_MAX_VELOCITY}`,
+                    stackingGroup: `default:${ATTR_MAX_VELOCITY}`,
                 })
             }
             const sigPct = fighter.getFinal(ATTR_FIGHTER_EVASIVE_SIG_BONUS, 0)
@@ -3072,7 +3217,7 @@ export function applyLegacyFighterAbilities(ctx: FitContext): void {
                     sourceID: fighter.id,
                     operation: 'PostPercent',
                     value: sigPct / 100,
-                    stackingGroup: `attr:${ATTR_SIGNATURE_RADIUS}`,
+                    stackingGroup: `default:${ATTR_SIGNATURE_RADIUS}`,
                 })
             }
             // Resonance multipliers: SDE encodes them as `0.95` etc. (already
@@ -3092,7 +3237,7 @@ export function applyLegacyFighterAbilities(ctx: FitContext): void {
                     sourceID: fighter.id,
                     operation: 'PostMul',
                     value: mul,
-                    stackingGroup: `attr:${tgtAttr}`,
+                    stackingGroup: `default:${tgtAttr}`,
                 })
             }
         }
@@ -3318,7 +3463,7 @@ export function applyLegacyRAH(
                 sourceID: mod.id,
                 operation: 'PreMul',
                 value: factor,
-                stackingGroup: `attr:${tgtAttr}`,
+                stackingGroup: `default:${tgtAttr}`,
             })
         }
     }

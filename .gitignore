@@ -16,3 +16,7 @@ __pycache__/
 /.sde-src/
 /fixtures/sde/
 /*.jsonl
+
+# Real-fit corpus harvested from EVE Workbench for the diff harness
+# (other capsuleers' published fits — read like the site does, not redistributed).
+/.workbench/

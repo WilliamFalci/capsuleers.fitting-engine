@@ -52,6 +52,8 @@
     "clean": "rm -rf dist",
     "build:data": "node scripts/fetch-sde.mjs && tsx scripts/build-bundle.ts",
     "diff:setup": "bash scripts/setup-pyfa-oracle.sh",
+    "corpus:fetch": "node scripts/fetch-workbench-corpus.mjs",
+    "stacking:build": "node scripts/build-stacking-registry.mjs",
     "diff": "node test/diff/run-diff.mjs",
     "diff:recalibrate": "node scripts/recalibrate-pyfa-pin.mjs",
     "test:pyfa": "tsx test/parity/run-pyfa-parity.ts",

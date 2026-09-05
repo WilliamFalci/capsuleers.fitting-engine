@@ -18,31 +18,33 @@
  * and MUST be classified (and their reason replaced) before release.
  *
  * Invariant: never regress `npm run test:pyfa` (662/0) to satisfy this harness.
+ *
+ * ---------------------------------------------------------------------------
+ * This list was 19 entries and is now ONE. The other 18 were not quirks, they
+ * were bugs, and each is fixed with its measurement recorded at the fix:
+ * signature-radius stacking (the MJD's bloom is unpenalised in pyfa), prop-mod
+ * velocity (PostMul and PostPercent share one penalty pool upstream), weapon
+ * DPS (the Claw's own hull ROF bonus belongs in the chain), align time (a
+ * transposed freighter effect), drone control range (one accumulator, on the
+ * ship) and the Malediction's capacitor (an Interceptor's role bonus reaches a
+ * Civilian Warp Disruptor, which pyfa filters by group and the SDE by skill).
+ * Don't widen this list to make a red run green.
  */
 
 /** @typedef {{ ship: string, fitType: string, key: string, reason: string }} KnownDiff */
 
 /** @type {KnownDiff[]} */
 export const KNOWN_DIFFS = [
-    { ship: "Bowhead", fitType: "t2", key: "navigation.alignTime", reason: "FP precision (~3%) on align time (mass/agility rounding)" },
-    { ship: "Claw", fitType: "t2", key: "offense.totalDps", reason: "FP precision (+1.5%) on total DPS" },
-    { ship: "Claw", fitType: "t2", key: "offense.weaponDps", reason: "FP precision (+1.5%) on weapon DPS" },
-    { ship: "Dominix Navy Issue", fitType: "mixed", key: "navigation.signatureRadius", reason: "multi-module sig stacking (MWD+MJD) — per-effect penaltyGroups regress parity suite (same class as Ferox/Mastodon/Rokh)" },
-    { ship: "Ferox Navy Issue", fitType: "non-bonused", key: "navigation.signatureRadius", reason: "multi-module sig stacking (MWD+rig) — per-effect penaltyGroups regress parity suite" },
-    { ship: "Griffin Navy Issue", fitType: "bonused", key: "targeting.droneControlRange", reason: "pyfa per-ship drone-control-range anomaly (bare-hull, module-independent)" },
-    { ship: "Griffin Navy Issue", fitType: "mixed", key: "capacitor.stablePercent", reason: "cap-sim FP at the near-zero cap-stability boundary (~1.1% stable): integer-cycle equilibrium vs pyfa float diverge by ~0.04 percentage points (+4% relative, negligible absolute)" },
-    { ship: "Griffin Navy Issue", fitType: "mixed", key: "targeting.droneControlRange", reason: "pyfa per-ship drone-control-range anomaly (bare-hull, module-independent)" },
-    { ship: "Griffin Navy Issue", fitType: "non-bonused", key: "targeting.droneControlRange", reason: "pyfa per-ship drone-control-range anomaly (bare-hull, module-independent)" },
-    { ship: "Griffin Navy Issue", fitType: "t2", key: "targeting.droneControlRange", reason: "pyfa per-ship drone-control-range anomaly (bare-hull, module-independent)" },
-    { ship: "Malediction", fitType: "non-bonused", key: "capacitor.secondsToEmpty", reason: "Ancillary Shield Booster charge-powered cap duty cycle not modelled (niche)" },
-    { ship: "Mastodon", fitType: "non-bonused", key: "navigation.signatureRadius", reason: "multi-module sig stacking (MWD+rig) — per-effect penaltyGroups regress parity suite" },
-    { ship: "Rokh", fitType: "non-bonused", key: "navigation.signatureRadius", reason: "multi-module sig stacking (MWD+MJD+rig) — per-effect penaltyGroups regress parity suite" },
-    { ship: "Scimitar", fitType: "non-bonused", key: "navigation.maxVelocity", reason: "FP precision (~2%) on prop-mod velocity" },
-    { ship: "Stabber", fitType: "non-bonused", key: "navigation.maxVelocity", reason: "FP precision (~2%) on prop-mod velocity" },
-    { ship: "Thrasher Fleet Issue", fitType: "non-bonused", key: "offense.alphaStrike", reason: "FP precision (+1.4%) on alpha strike" },
-    { ship: "Thrasher Fleet Issue", fitType: "non-bonused", key: "offense.totalDps", reason: "FP precision (+1.4%) on total DPS" },
-    { ship: "Thrasher Fleet Issue", fitType: "non-bonused", key: "offense.weaponDps", reason: "FP precision (+1.4%) on weapon DPS" },
-    { ship: "Zarmazd", fitType: "non-bonused", key: "navigation.maxVelocity", reason: "FP precision (~2%) on prop-mod velocity" },
+    {
+        ship: "Griffin Navy Issue", fitType: "mixed", key: "capacitor.stablePercent",
+        reason: "cap-stability BOUNDARY, not a modelling difference: this fit draws 12.52 GJ/s against "
+            + "11.49 GJ/s of peak recharge and is held up only by an amortised cap booster, so the "
+            + "equilibrium sits at ~1.1 % of a 398 GJ capacitor — the part of the recharge curve that is "
+            + "nearly vertical. We solve that equilibrium analytically, pyfa reports the minimum its "
+            + "discrete simulation reaches; the two agree to 4 decimal places wherever the curve is flat "
+            + "(measured: 89.3883 % on both for a Malediction) and differ by 0.043 PERCENTAGE POINTS here. "
+            + "Chasing it would mean replacing the analytic solve with pyfa's time-stepped loop.",
+    },
 ]
 
 const _key = (d) => `${d.ship}|${d.fitType}|${d.key}`

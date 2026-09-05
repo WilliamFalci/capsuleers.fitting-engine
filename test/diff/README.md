@@ -1,5 +1,30 @@
 # Differential Pyfa-parity harness
 
+## Corpora (`--source`)
+
+Three, and the default is only one of them:
+
+| `--source` | corpus | size | built by |
+|---|---|---|---|
+| `generated` (default) | 4 synthetic fits per published ship | 1 692 | `fit-generator.mjs` |
+| `workbench` | 2-3 REAL fits per hull from EVE Workbench | 913 / 330 hulls | `fit-sources.mjs` + `npm run corpus:fetch` |
+| `implants` | every implant SET + ship-affecting booster, drawbacks off AND on | 1 857 | `fit-sources.mjs` |
+| `all` | every corpus in one run | | |
+
+The generated corpus is assembled by OUR OWN slot/charge predicates, so on its
+own it can only exercise what the engine already believes is fittable. The other
+two exist because that blind spot was expensive — real published fits surfaced
+six engine bugs on their first run, and the implant corpus three more that no
+module-only fit can reach.
+
+Coverage is DECLARED, never silent: unparseable fits, an absent corpus and items
+the pinned pyfa doesn't know are printed as notes. A corpus that quietly shrinks
+while still reporting "no differences" is the one failure this harness exists to
+prevent — which is also why the oracle answers a `{"op":"known"}` preflight, so a
+corpus can drop what pyfa cannot supply instead of producing incomparable fits.
+
+
+
 Automatically finds where `eve-fit-engine` disagrees with **pyfa-org/Pyfa**. For
 every ship it generates 4 fits, computes the stats with both engines, and prints
 every difference. No screenshots. Designed to drive a `/goal` verify-and-fix loop.

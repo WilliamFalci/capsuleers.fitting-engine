@@ -239,11 +239,34 @@ interface BuildContext {
     written: Array<{ path: string; bytes: number; entries: number }>
 }
 
+/**
+ * Attributes, plus the CAP references that bound them.
+ *
+ * An attribute may name another attribute as its ceiling or floor
+ * (`maxAttributeID` / `minAttributeID`), and the engine clamps to it — that is
+ * what makes a Polarized weapon REMOVE resistances (resonance forced to 100,
+ * capped back to 1.0) instead of multiplying incoming damage a hundredfold.
+ *
+ * The 36 capped attributes reference bounds that are themselves `published:
+ * false` (shieldMaxDamageResonance, speedLimit, ConstantMinusNinetyNine, …), so
+ * the publish filter has to let those through or every cap would resolve to
+ * "no bound" and the clamp would silently do nothing.
+ */
 async function buildAttributes(ctx: BuildContext) {
+    const rows: any[] = []
+    for await (const a of streamJsonl<any>(path.join(SDE_ROOT, 'dogmaAttributes.jsonl'))) rows.push(a)
+
+    const capIds = new Set<number>()
+    for (const a of rows) {
+        if (!a.published) continue
+        if (a.maxAttributeID) capIds.add(a.maxAttributeID)
+        if (a.minAttributeID) capIds.add(a.minAttributeID)
+    }
+
     const out: Record<number, any> = {}
     let count = 0
-    for await (const a of streamJsonl<any>(path.join(SDE_ROOT, 'dogmaAttributes.jsonl'))) {
-        if (!a.published) continue
+    for (const a of rows) {
+        if (!a.published && !capIds.has(a._key)) continue
         out[a._key] = {
             id: a._key,
             name: a.name,
@@ -255,6 +278,8 @@ async function buildAttributes(ctx: BuildContext) {
             stackable: !!a.stackable,
             attributeCategoryID: a.attributeCategoryID,
             dataType: a.dataType,
+            maxAttributeID: a.maxAttributeID,
+            minAttributeID: a.minAttributeID,
         }
         count++
     }
