@@ -23,9 +23,19 @@ list of contributors.
 -------------------------------------------------------------------------------
 EVE Online Static Data Export (SDE)
 -------------------------------------------------------------------------------
-This package contains NO EVE Online game data. It operates on a `FittingDataset`
-that the consumer supplies at runtime. EVE Online and the EVE logo are the
-registered trademarks of CCP hf. All EVE-related materials are property of CCP
-hf. SDE data is distributed by CCP under its own licence terms (the EVE Online
-Third-Party Developer License / SDE terms) and is NOT covered by this package's
-GPL licence.
+The base entry (`eve-fit-engine`) contains NO EVE Online game data: it operates
+on a `FittingDataset` that the consumer supplies at runtime.
+
+The Node entry (`eve-fit-engine/node`) is batteries-included, and the published
+package therefore DOES ship a snapshot of the EVE Online Static Data Export
+under `data/` (~8 MB). That snapshot is included purely by MERE AGGREGATION
+with the GPL-covered program: it is not part of the program, it is not
+relicensed by the GPL, and it remains governed by its own terms. See
+`data/SDE-LICENSE.md`.
+
+EVE Online and the EVE logo are the registered trademarks of Fenris Creations.
+All rights are reserved worldwide. All EVE-related materials are the
+intellectual property of Fenris Creations, which does not endorse, and is in no
+way affiliated with, this package. The SDE is redistributed under the EVE
+Online Developer License Agreement, which permits the use of EVE Online data in
+third-party applications.
