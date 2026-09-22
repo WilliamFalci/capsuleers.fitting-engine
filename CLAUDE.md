@@ -230,6 +230,10 @@ and publish with the `prod`-environment `NPM_TOKEN`):
   commits the new `data/` + bumps a patch + auto-publishes (these are the
   `[auto]` release commits). On parity failure it opens an issue and does NOT
   publish.
+  **It runs at 05:00 UTC, so a CCP release in the evening stays uncovered for
+  up to ~10 h** — 3538132 landed 2026-09-22 19:31Z, after that day's run had
+  already shipped 3528119. When a new SDE is announced, dispatch it by hand:
+  `gh workflow run sde-refresh.yml` (v0.2.3 was published this way, gate green).
 - **`.github/workflows/release.yml`** — manual `workflow_dispatch` with a
   `bump` choice (`patch`/`minor`/`major`). This is the path for **code-only
   fixes** (engine changes don't touch `data/`, so they never trigger
