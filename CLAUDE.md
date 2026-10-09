@@ -246,3 +246,12 @@ every command, the validation suites, best practices). **Keep it — and the
 command/flow references in this file — in sync whenever you add/rename an `npm`
 script, change a validation or release flow, or alter a parity invariant.** Do
 it in the same PR as the change; stale command docs are a contributor trap.
+
+## Marchio
+
+L'emblema in testa al README e' quello di capsuleers.app, servito dal sito
+(`https://capsuleers.app/images/emblem.svg`) e generato da `scripts/brand/` di
+capsuleers.website: e' li' che si cambia. Questo repo non ha superfici grafiche
+proprie, quindi non ne tiene una copia — un URL assoluto funziona anche nella
+pagina del pacchetto su npm, dove una cartella esclusa da `files` romperebbe
+l'immagine.

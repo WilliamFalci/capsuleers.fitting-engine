@@ -1,3 +1,5 @@
+<p align="center"><img src="https://capsuleers.app/images/emblem.svg" width="160" alt="Capsuleers.app"></p>
+
 # eve-fit-engine
 
 A **Pyfa-parity** EVE Online ship & Upwell-structure fitting calculation engine,
