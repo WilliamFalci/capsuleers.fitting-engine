@@ -1,4 +1,4 @@
-<p align="center"><img src="https://capsuleers.app/images/emblem.svg" width="160" alt="Capsuleers.app"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/WilliamFalci/capsuleers.fitting-engine/master/docs/brand/emblem.svg" width="160" alt="Capsuleers emblem"></p>
 
 # eve-fit-engine
 

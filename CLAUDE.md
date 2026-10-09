@@ -249,9 +249,10 @@ it in the same PR as the change; stale command docs are a contributor trap.
 
 ## Marchio
 
-L'emblema in testa al README e' quello di capsuleers.app, servito dal sito
-(`https://capsuleers.app/images/emblem.svg`) e generato da `scripts/brand/` di
-capsuleers.website: e' li' che si cambia. Questo repo non ha superfici grafiche
-proprie, quindi non ne tiene una copia — un URL assoluto funziona anche nella
-pagina del pacchetto su npm, dove una cartella esclusa da `files` romperebbe
-l'immagine.
+L'emblema del progetto sta in `docs/brand/emblem.svg` (+ `emblem-512.png`): e' quello
+Capsuleers col suffisso e il colore di QUESTO progetto, cosi' i loghi dei vari repo
+si distinguono fra loro. Lo genera `npm run brand:icons -- <cartella>` in
+capsuleers.website (`scripts/brand/`, voce `fitengine` di `PRODUCTS`): si cambia li' e si
+ricopia qui, non si ritocca a mano.
+Nel README e' un URL ASSOLUTO a raw.githubusercontent: la pagina del pacchetto su npm
+non ha `docs/` (esclusa da `files`) e un percorso relativo li' sarebbe un'immagine rotta.
