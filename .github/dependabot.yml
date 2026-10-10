@@ -1,0 +1,42 @@
+# Dependabot: security fixes + routine dependency updates.
+#
+# Security updates are turned on in the repo settings (Dependabot alerts +
+# security updates); this file shapes the PRs they open. All vulnerable
+# dependencies are grouped into ONE security PR per ecosystem.
+#
+# There is deliberately NO `allow` list: dependabot-core applies `allow` to
+# security updates too (Job#allowed_update? filters by dependency-name), so an
+# allow-list restricted to one package would silently suppress every security
+# fix for all the others.
+#
+# Version updates: minor + patch grouped into one PR; majors open as separate
+# PRs (close one to make Dependabot ignore that major). Nothing here is
+# auto-merged.
+
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    versioning-strategy: increase
+    open-pull-requests-limit: 10
+    groups:
+      security:
+        applies-to: security-updates
+        patterns: ["*"]
+      minor-and-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    commit-message:
+      prefix: "chore(deps)"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "chore(ci)"
