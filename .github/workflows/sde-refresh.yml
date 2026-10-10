@@ -28,8 +28,8 @@ jobs:
     # without protection rules, or move NPM_TOKEN to a repository secret.
     environment: prod
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
           registry-url: https://registry.npmjs.org
@@ -87,7 +87,7 @@ jobs:
       # the upstream build number moves, so the thread reads as a timeline.
       - name: Report blocked refresh (parity failed)
         if: steps.chg.outputs.changed == 'true' && steps.gate.outputs.ok != '0'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require('fs')
