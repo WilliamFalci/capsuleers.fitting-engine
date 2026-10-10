@@ -66,9 +66,9 @@
   },
   "devDependencies": {
     "@types/node": "^22.19.19",
-    "adm-zip": "^0.5.16",
+    "adm-zip": "^0.6.1",
     "tsup": "^8.3.5",
-    "tsx": "^4.20.3",
+    "tsx": "^4.23.15",
     "typescript": "^5.7.2"
   },
   "publishConfig": {
