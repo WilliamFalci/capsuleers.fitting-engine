@@ -5,7 +5,7 @@
  * never describe two different pyfa versions.
  *
  * The penalty is a property of the CALL, not of the attribute: pyfa writes
- * `stackingPenalties=True` one boost at a time, and of its 2799 attribute-boosting
+ * `stackingPenalties=True` one boost at a time, and of its 2812 attribute-boosting
  * calls only 403 penalise, across 287 effects. Both coarser models are
  * wrong and both were measured: penalising everything that shares an attribute
  * made a Rokh with a Microwarpdrive and a Micro Jump Drive read 6 335 m of
@@ -38,7 +38,7 @@ export const STACKING_PENALISED: ReadonlyMap<number, readonly string[]> = new Ma
     [699, ['564#default!booster+implant+skill']],
     [763, ['*#default']],
     [784, ['281#default!booster+implant+skill']],
-    [854, ['564#cloakingScanResolutionMultiplier']],
+    [854, ['564#PostMul']],
     [856, ['600#default!booster+implant+skill']],
     [889, ['51#default']],
     [891, ['37#default!ship']],
@@ -66,7 +66,7 @@ export const STACKING_PENALISED: ReadonlyMap<number, readonly string[]> = new Ma
     [2232, ['*#default']],
     [2302, ['*#preMul']],
     [2644, ['552#default']],
-    [2645, ['564#default']],
+    [2645, ['564#PostMul']],
     [2646, ['76#default']],
     [2670, ['*#default', '564#default', '76#default']],
     [2693, ['158#default!booster']],

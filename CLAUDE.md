@@ -208,6 +208,17 @@ appears it opens a PR labelled `diff-parity` instead and fails the run, because 
 robot must never write a `known-diffs.mjs` reason. Nothing there is published —
 `PYFA_REF` and the registry are harness files, outside package.json `files`.
 
+**The oracle's SQLAlchemy version is read from the pin's `pyproject.toml`**
+(`scripts/setup-pyfa-oracle.sh`), never hardcoded. pyfa moved to SQLAlchemy 2.x
+in September 2026; the script still forced 1.4.50, so `db_update.py` died on
+`attribute_keyed_dict`, the 2026-09-27 bump went red, and the pin froze at
+`8b04f3b` for three weeks. Meanwhile CCP shipped the hybrid-drone rework and
+other balance changes: issues #37-#48 reported ~500 "engine" diffs (drone DPS
++15 %, Black Ops mass −25 %, …) that were ALL oracle staleness — against pyfa
+`3b9ce39` the same corpora read 4505/4506 with zero unexpected diffs. A red
+`pyfa-pin-bump` is therefore not a harmless skip: it is the start of a false
+alarm cascade. Read its log before the Monday issues.
+
 Why it exists: `data/` refreshed itself daily and the pin did not, so the oracle
 fell behind CCP. Issue #34 was that asymmetry — a new module (`Breach Control`)
 plus an Aralez rework produced 46 phantom "engine" diffs, and the oracle had been

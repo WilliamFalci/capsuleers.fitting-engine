@@ -39,7 +39,7 @@ concurrency:
 
 env:
   # Pin pyfa to the commit the known-diffs registry was calibrated against.
-  PYFA_REF: 8b04f3b271e614b3e103853b44a7851a63d79d0e
+  PYFA_REF: 3b9ce39b8bb41bb7e3fbf097f683da9143a48133
 
 jobs:
   diff:

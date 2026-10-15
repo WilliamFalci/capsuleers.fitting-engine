@@ -52,9 +52,20 @@ if [ ! -x "$VENV/bin/python" ]; then
   echo "[oracle] creating venv..."
   "$PY" -m venv "$VENV"
 fi
-echo "[oracle] installing deps..."
+#    The SQLAlchemy version is READ FROM THE PIN, not hardcoded: pyfa moved to
+#    SQLAlchemy 2.x (2026-09, `attribute_keyed_dict`), and the old hardcoded
+#    1.4.50 made every pin bump past that point die in db_update.py — the
+#    weekly pyfa-pin-bump went red on 2026-09-27 and the pin froze at 8b04f3b
+#    while CCP shipped a drone rework, so the diff filed the rework as engine
+#    bugs. Pins without a pyproject.toml (pre-uv pyfa) keep 1.4.50.
+SQLA_SPEC="sqlalchemy==1.4.50"
+if [ -f "$PYFA/pyproject.toml" ]; then
+  PINNED="$(grep -oE '"sqlalchemy==[0-9][0-9.a-z]*"' "$PYFA/pyproject.toml" | head -1 | tr -d '"')"
+  [ -n "$PINNED" ] && SQLA_SPEC="$PINNED"
+fi
+echo "[oracle] installing deps ($SQLA_SPEC)..."
 "$VENV/bin/pip" install --quiet --upgrade pip >/dev/null 2>&1 || true
-"$VENV/bin/pip" install --quiet "sqlalchemy==1.4.50" logbook python-dateutil pyyaml cryptography
+"$VENV/bin/pip" install --quiet "$SQLA_SPEC" logbook python-dateutil pyyaml cryptography
 
 # 3. wx stub — config.py imports wx only for wx.Colour (UI slot colours).
 mkdir -p "$STUBS"
