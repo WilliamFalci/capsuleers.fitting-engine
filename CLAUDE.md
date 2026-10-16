@@ -267,3 +267,19 @@ capsuleers.website (`scripts/brand/`, voce `fitengine` di `PRODUCTS`): si cambia
 ricopia qui, non si ritocca a mano.
 Nel README e' un URL ASSOLUTO a raw.githubusercontent: la pagina del pacchetto su npm
 non ha `docs/` (esclusa da `files`) e un percorso relativo li' sarebbe un'immagine rotta.
+
+## Delegating to subagents
+
+When delegating work to subagents, pick the model and the `effort` level based on
+how hard the task is:
+
+- **Simple tasks → `model: "sonnet"`**, with `effort` `low` or `medium`: searching or
+  reading code, mechanical edits, renames, regenerating generated code, running
+  typecheck or tests and reporting the result.
+- **Complex tasks → `model: "opus"`**, with `effort` set to match the difficulty:
+  `high` for non-trivial implementation or debugging, `xhigh`/`max` for changes that
+  touch other repos or shared contracts (shared Postgres schema, `jobs` payloads),
+  data migrations, or tricky bugs with no obvious cause.
+
+When in doubt, start at the lower level and escalate only if the result isn't good
+enough.
