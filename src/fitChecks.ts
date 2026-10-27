@@ -273,6 +273,11 @@ export function moduleAcceptsChargeType(mod: SdeType, charge: SdeType): boolean 
 }
 
 const ACTIVE_EFFECT_CATEGORIES = new Set([1, 2, 3])
+/** effectID 16 = `online`: every power-grid module carries it (and in our SDE
+ *  it has effectCategoryID 1), so it says nothing about being activatable. */
+const ONLINE_EFFECT_ID = 16
+/** effectCategoryID 5 = overload (overheat) effects. */
+const OVERLOAD_EFFECT_CATEGORY = 5
 
 /**
  * True iff the module declares at least one activation-class effect
@@ -287,12 +292,56 @@ export function isActivatableModule(
     effects: Map<number, { effectCategoryID?: number }>,
 ): boolean {
     for (const e of mod.effects) {
+        if (e.id === ONLINE_EFFECT_ID) continue
         const eff = effects.get(e.id)
         if (eff && eff.effectCategoryID !== undefined && ACTIVE_EFFECT_CATEGORIES.has(eff.effectCategoryID)) {
             return true
         }
     }
     return false
+}
+
+/** True iff the module declares an overload (overheat) effect (cat 5). */
+export function isOverloadableModule(
+    mod: SdeType,
+    effects: Map<number, { effectCategoryID?: number }>,
+): boolean {
+    for (const e of mod.effects) {
+        if (effects.get(e.id)?.effectCategoryID === OVERLOAD_EFFECT_CATEGORY) return true
+    }
+    return false
+}
+
+/**
+ * State to SHOW/treat for a module: passive modules saved as ACTIVE/OVERLOAD
+ * read as ONLINE, non-overloadable ones saved as OVERLOAD read as ACTIVE.
+ * Display-only — stored data is not migrated.
+ */
+export function effectiveModuleState(
+    mod: SdeType,
+    effects: Map<number, { effectCategoryID?: number }>,
+    state: 'OFFLINE' | 'ONLINE' | 'ACTIVE' | 'OVERLOAD',
+): 'OFFLINE' | 'ONLINE' | 'ACTIVE' | 'OVERLOAD' {
+    if (state === 'OFFLINE' || state === 'ONLINE') return state
+    if (!isActivatableModule(mod, effects)) return 'ONLINE'
+    if (state === 'OVERLOAD' && !isOverloadableModule(mod, effects)) return 'ACTIVE'
+    return state
+}
+
+/**
+ * Next state on a plain click. Passive: ONLINE <-> OFFLINE. Activatable:
+ * ONLINE -> ACTIVE -> (OVERLOAD if overloadable) -> ONLINE; OFFLINE -> ONLINE.
+ */
+export function nextModuleState(
+    mod: SdeType,
+    effects: Map<number, { effectCategoryID?: number }>,
+    state: 'OFFLINE' | 'ONLINE' | 'ACTIVE' | 'OVERLOAD',
+): 'OFFLINE' | 'ONLINE' | 'ACTIVE' | 'OVERLOAD' {
+    const cur = effectiveModuleState(mod, effects, state)
+    if (!isActivatableModule(mod, effects)) return cur === 'OFFLINE' ? 'ONLINE' : 'OFFLINE'
+    if (cur === 'ONLINE') return 'ACTIVE'
+    if (cur === 'ACTIVE') return isOverloadableModule(mod, effects) ? 'OVERLOAD' : 'ONLINE'
+    return 'ONLINE'
 }
 
 /** Module groups whose "active" state is operationally costly or

@@ -70,5 +70,8 @@ export {
     moduleAcceptsChargeType,
     defaultStateForModule,
     isActivatableModule,
+    isOverloadableModule,
+    effectiveModuleState,
+    nextModuleState,
     defaultModeTypeIDFor,
 } from './fitChecks'
