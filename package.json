@@ -15,13 +15,13 @@
     "eft"
   ],
   "author": "Capsuleers.app",
-  "homepage": "https://github.com/WilliamFalci/capsuleers.fitting-engine",
+  "homepage": "https://github.com/capsuleers-app/capsuleers.fitting-engine",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/WilliamFalci/capsuleers.fitting-engine.git"
+    "url": "git+https://github.com/capsuleers-app/capsuleers.fitting-engine.git"
   },
   "bugs": {
-    "url": "https://github.com/WilliamFalci/capsuleers.fitting-engine/issues"
+    "url": "https://github.com/capsuleers-app/capsuleers.fitting-engine/issues"
   },
   "exports": {
     ".": {

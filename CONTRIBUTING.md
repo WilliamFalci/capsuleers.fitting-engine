@@ -46,7 +46,7 @@ Green on all four = your change is shippable.
 - **git** with access to clone `pyfa-org/Pyfa` (public).
 
 ```bash
-git clone git@github.com:WilliamFalci/capsuleers.fitting-engine.git
+git clone git@github.com:capsuleers-app/capsuleers.fitting-engine.git
 cd capsuleers.fitting-engine
 npm install
 ```
